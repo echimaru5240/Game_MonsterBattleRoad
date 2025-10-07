@@ -39,6 +39,8 @@ public class MonsterController : MonoBehaviour
         currentTargets = targets;
         attackEnded = false; // 攻撃開始時にリセット
 
+        Quaternion startRot = transform.rotation;
+
         // ① 正面ショット
         cameraManager?.PlayFrontShot(transform, isEnemy, 1.0f);
 
@@ -53,6 +55,12 @@ public class MonsterController : MonoBehaviour
             Vector3 end = target.transform.position + (isEnemy ? Vector3.forward : Vector3.back) * 1.2f; // 少し手前に
             float t = 0;
 
+            // ? ターゲット方向を向く
+            Vector3 dir = (end - start).normalized;
+            dir.y = 0;
+            Quaternion lookRot = Quaternion.LookRotation(dir);
+            transform.rotation = lookRot;
+
             while (t < 1f)
             {
                 t += Time.deltaTime * 1.5f; // 移動速度
@@ -65,6 +73,7 @@ public class MonsterController : MonoBehaviour
             }
         }
 
+        transform.rotation = startRot;
         // ③ 攻撃モーション
         PlayAttack();
         // 攻撃アニメ中の OnAttackHit() で onHitCallback が呼ばれる
