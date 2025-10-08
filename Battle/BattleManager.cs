@@ -74,16 +74,16 @@ public class BattleManager : MonoBehaviour
     // ================================
     // セットアップ
     // ================================
-    public void SetupBattle(MonsterCard[] players, MonsterCard[] enemies, System.Action<bool, int> onEnd, int initialCourage)
+    public void SetupBattle(MonsterCard[] players, BattleStageData stage, System.Action<bool, int> onEnd, int initialCourage)
     {
         playerCards = players;
-        enemyCards = enemies;
+        enemyCards = stage.enemyTeam;
         onBattleEnd = onEnd;
 
         // HP初期化
         PlayerMaxHP = SumHP(players);
         PlayerCurrentHP = PlayerMaxHP;
-        EnemyMaxHP = SumHP(enemies);
+        EnemyMaxHP = SumHP(stage.enemyTeam);
         EnemyCurrentHP = EnemyMaxHP;
 
         // ゲージ初期化
@@ -97,11 +97,16 @@ public class BattleManager : MonoBehaviour
         ui.ShowMainText("バトル開始！");
 
         // 出現
-        spawner.Spawn(players, enemies);
+        spawner.SetSpawnAreaPositions(stage.isBossStage);
+        spawner.Spawn(players, stage.enemyTeam);
 
         selectedByUser = new int[players.Length];
         for (int i = 0; i < selectedByUser.Length; i++) selectedByUser[i] = -1;
+        playerActions.Clear();
+        ResetSelections();
 
+        // ? ステージ情報からカメラ設定
+        cameraManager.SetBossMode(stage.isBossStage);
         cameraManager.StartOverviewRotation();
 
         ChangeState(BattleState.TURN_START);
