@@ -23,7 +23,7 @@ public class BattleFlowManager : MonoBehaviour
         // ステージ情報を表示（UIで背景やBGM切り替えも可能）
         Debug.Log($"ステージ開始: {stage.stageName}");
 
-        battleManager.SetupBattle(playerTeam, stage.enemyTeam, OnBattleEnd, initialCourage);
+        battleManager.SetupBattle(playerTeam, stage, OnBattleEnd, initialCourage);
 
         if (stage.bgm != null)
         {

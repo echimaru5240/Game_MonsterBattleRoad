@@ -6,6 +6,8 @@ public class BattleSpawner : MonoBehaviour
     [Header("Spawn Areas")]
     [SerializeField] private Transform playerArea;
     [SerializeField] private Transform enemyArea;
+    public float posZ;
+    public float bossPosZ;
 
     [Header("Camera Manager")]
     [SerializeField] private CameraManager cameraManager; // ← 追加：CameraManager参照
@@ -77,6 +79,18 @@ public class BattleSpawner : MonoBehaviour
                 Debug.LogWarning($"{obj.name} に MonsterController がアタッチされていません。");
             }
         }
+    }
+
+    // ================================
+    // 配置位置を動的に変更
+    // ================================
+    public void SetSpawnAreaPositions(bool isBossStage)
+    {
+        if (isBossStage) {
+            posZ = bossPosZ;
+        }
+        if (playerArea != null) playerArea.localPosition = new Vector3(0, 0, -1 * posZ);
+        if (enemyArea != null) enemyArea.localPosition = new Vector3(0, 0, posZ);
     }
 
     // ================================

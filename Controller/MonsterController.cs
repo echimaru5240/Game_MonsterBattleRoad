@@ -98,7 +98,7 @@ public class MonsterController : MonoBehaviour
         }
 
         // 戻ったら全体カメラへ
-        cameraManager?.PlayHitReactionCamera(transform, 0f);
+        cameraManager?.PlayHitReactionCamera(transform, isEnemy, 0f);
 
 
         // ⑤ 次の行動まで少し間を置く（余韻タイム）
@@ -132,7 +132,7 @@ public class MonsterController : MonoBehaviour
 
             // 被弾時の寄りカメラ
             if (cameraManager != null)
-                cameraManager?.PlayHitReactionCamera(transform, 1.2f);
+                cameraManager?.PlayHitReactionCamera(transform, isEnemy, 1.2f);
         }
     }
 

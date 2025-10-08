@@ -18,41 +18,78 @@ public class CameraManager : MonoBehaviour
     private Coroutine currentRoutine;
 
     // ==============================
-    // ? 回転カメラ設定
+    // ? 俯瞰カメラ設定（Inspectorで調整可能）
     // ==============================
     [Header("Overview Rotation Settings")]
-    public Vector3 battleCenter = Vector3.zero; // 固定中心
-    public float rotationSpeed = 10f;  // 回転速度（度/秒）
-    public float rotationRadius = 10f; // 戦場中心からの距離
-    public float baseHeight = 5f;      // 基本高さ
-    public float heightAmplitude = 0.5f; // 上下ゆれ幅
-    public float zoomAmplitude = 1.0f;   // ズームの振れ幅
-    public float zoomSpeed = 0.5f;       // ズーム変化速度
+    [Tooltip("戦闘の中心点")]
+    public Vector3 battleCenter = Vector3.zero;
+
+    [Tooltip("回転速度（度/秒）")]
+    public float rotationSpeed = 10f;
+
+    [Tooltip("回転半径（戦場中心からの距離）")]
+    public float rotationRadius;
+    public float bossRotationRadius;
+
+    [Tooltip("カメラの高さ")]
+    public float baseHeight = 5f;
+
+    [Tooltip("ボスモンスターを撮るときのZ軸オフセット")]
+    public float lookAtZOffsetBoss = -2f;
+
+    [Tooltip("上下の揺れ幅")]
+    public float heightAmplitude = 0.5f;
+
+    [Tooltip("ズームの振れ幅")]
+    public float zoomAmplitude = 1.0f;
+
+    [Tooltip("ズーム変化速度")]
+    public float zoomSpeed = 0.5f;
+
+    [Tooltip("初期角度（度）")]
+    public float initialAngle = 45f;
+
+    [Tooltip("ボスを映すときに距離を何倍にするか")]
+    public float bossDistanceMultiplier = 2.0f;
+
     private bool rotateOverview = false;
-    private float angle = 0f;
+    private float angle;
+    private bool isBossMode = false;
+
 
     void Start()
     {
         brain = Camera.main.GetComponent<CinemachineBrain>();
-        SetCamera(overviewCamera);
+        if (brain == null)
+        {
+            Debug.LogWarning("CinemachineBrainがMainCameraに見つかりません。");
+            return;
+        }
+
+        angle = initialAngle; // ← Inspectorで指定した初期角度からスタート
+        if (isBossMode) {
+            rotationRadius = bossRotationRadius;
+        }
+        SetCameraInstant(overviewCamera);
+        Debug.Log("[CameraManager] カメラ初期化完了");
     }
 
     void Update()
     {
         if (rotateOverview)
         {
-            // 回転角度を更新（速度をゆるく揺らす）
+            // 回転角度を更新（緩やかなゆらぎ）
             float speedMod = 1f + Mathf.Sin(Time.time * 0.3f) * 0.2f;
             angle += rotationSpeed * speedMod * Time.deltaTime;
             float rad = angle * Mathf.Deg2Rad;
 
-            // ゆるい上下揺れ
+            // 上下ゆれ
             float yOffset = Mathf.Sin(Time.time * 0.5f) * heightAmplitude;
 
-            // ゆるいズーム変化
+            // ズーム変化
             float currentRadius = rotationRadius + Mathf.Sin(Time.time * zoomSpeed) * zoomAmplitude;
 
-            // カメラ位置更新
+            // カメラ位置
             Vector3 offset = new Vector3(Mathf.Sin(rad), 0, Mathf.Cos(rad)) * currentRadius;
             Vector3 pos = battleCenter + offset + Vector3.up * (baseHeight + yOffset);
 
@@ -61,6 +98,11 @@ public class CameraManager : MonoBehaviour
         }
     }
 
+    public void SetBossMode(bool isBoss)
+    {
+        isBossMode = isBoss;
+        Debug.Log($"[CameraManager] ボスモード: {isBoss}");
+    }
 
     // ==============================
     // 回転制御
@@ -75,10 +117,10 @@ public class CameraManager : MonoBehaviour
         rotateOverview = false;
     }
 
-    public void PlayFrontShot(Transform attacker, bool isEnemy, float duration = 1.5f)
+    public void PlayFrontShot(Transform attacker, bool isEnemy, float duration = 1.5f, bool isBoss = false)
     {
         if (currentRoutine != null) StopCoroutine(currentRoutine);
-        currentRoutine = StartCoroutine(SwitchToFront(attacker, isEnemy, duration));
+        currentRoutine = StartCoroutine(SwitchToFront(attacker, isEnemy, duration, isBoss));
     }
 
     /// <summary>
@@ -93,54 +135,80 @@ public class CameraManager : MonoBehaviour
     /// <summary>
     /// 被弾時のカメラ寄り演出
     /// </summary>
-    public void PlayHitReactionCamera(Transform target, float duration = 1f)
+    public void PlayHitReactionCamera(Transform target, bool isEnemy, float duration = 1f)
     {
         if (currentRoutine != null) StopCoroutine(currentRoutine);
-        currentRoutine = StartCoroutine(SwitchToHit(target, duration));
+        currentRoutine = StartCoroutine(SwitchToHit(target, isEnemy, duration));
     }
 
-    private IEnumerator SwitchToFront(Transform target, bool isEnemy, float duration)
+    // ==============================
+    // 内部演出コルーチン
+    // ==============================
+    private IEnumerator SwitchToFront(Transform target, bool isEnemy, float duration, bool isBoss)
     {
-        if (isEnemy) {
-            SetupCameraFollow(actionCamera, target, new Vector3(0, 0, 0), 8f); // 近距離
-            actionCamera.transform.rotation = Quaternion.Euler(30f, -30f, 0); // 正面から撮影
+        float distance = 8f;
+
+        if (isEnemy)
+        {
+            if (isBossMode) {
+                distance = 10f * bossDistanceMultiplier;
+            }
+            SetupCameraFollow(actionCamera, target, isEnemy, Vector3.zero, distance);
+            actionCamera.transform.rotation = Quaternion.Euler(30f, -20f, 0);
         }
-        else {
-            SetupCameraFollow(actionCamera, target, new Vector3(0, 0, 0), 8f); // 近距離
-            actionCamera.transform.rotation = Quaternion.Euler(30f, 210f, 0); // 正面から撮影
+        else
+        {
+            SetupCameraFollow(actionCamera, target, isEnemy, Vector3.zero, distance);
+            actionCamera.transform.rotation = Quaternion.Euler(30f, 200f, 0);
         }
+
         SetCameraInstant(actionCamera);
         yield return new WaitForSeconds(duration);
     }
 
     private IEnumerator SwitchToAction(Transform target, bool isEnemy, float duration)
     {
-        StopOverviewRotation();
+        float distance = 10f;
 
-        SetupCameraFollow(actionCamera, target, new Vector3(0, 0, 0), 10f);
+        StopOverviewRotation();
+        if (isEnemy && isBossMode) {
+            distance *= bossDistanceMultiplier;
+        }
+        SetupCameraFollow(actionCamera, target, isEnemy, Vector3.zero, distance);
         SetCameraInstant(actionCamera);
         yield return new WaitForSeconds(duration);
         SetCamera(overviewCamera);
-        StartOverviewRotation(); // 攻撃終了後、再び回転を再開
+        StartOverviewRotation();
     }
 
-    private IEnumerator SwitchToHit(Transform target, float duration)
+    private IEnumerator SwitchToHit(Transform target, bool isEnemy, float duration)
     {
-        SetupCameraFollow(actionCamera, target, new Vector3(0, 0, 0), 3.5f);
+        SetupCameraFollow(actionCamera, target, isEnemy, Vector3.zero, 3.5f);
         SetCamera(actionCamera);
         yield return new WaitForSeconds(duration);
         SetCamera(overviewCamera);
     }
 
-    /// <summary>
-    /// CinemachineCameraに追従設定を適用
-    /// </summary>
-    private void SetupCameraFollow(CinemachineCamera cam, Transform target, Vector3 offset, float distance)
+    // ==============================
+    // Cinemachine設定
+    // ==============================
+    private void SetupCameraFollow(CinemachineCamera cam, Transform target, bool isEnemy,  Vector3 offset, float distance)
     {
         cam.Follow = target;
         cam.LookAt = target;
 
-        // 現在のCinemachine v3では、FramingTransposerは“Body”に直接アクセス
+        if (isBossMode && isEnemy) {
+            // 現在のカメラ位置を取得
+            Vector3 camPos = cam.transform.position;
+
+            // targetのforward方向に、Zオフセットを加算（位置のみ移動）
+            camPos += target.forward * lookAtZOffsetBoss;
+            camPos += target.right * -5;
+
+            // カメラの位置を更新（向きは変更しない）
+            cam.transform.position = camPos;
+        }
+
         if (cam.TryGetComponent(out CinemachinePositionComposer composer))
         {
             composer.TargetOffset = offset;
@@ -164,19 +232,15 @@ public class CameraManager : MonoBehaviour
 
     public void SetCameraInstant(CinemachineCamera cam)
     {
-        // 優先度を一瞬で切り替える
         overviewCamera.Priority = 0;
         actionCamera.Priority = 0;
         cam.Priority = 20;
 
-        // CinemachineBrainのBlendを一時的に無効化
         if (brain != null)
         {
-            var blend = new Unity.Cinemachine.CinemachineBlendDefinition(
-                Unity.Cinemachine.CinemachineBlendDefinition.Styles.Cut, 0f);
+            var blend = new CinemachineBlendDefinition(
+                CinemachineBlendDefinition.Styles.Cut, 0f);
             brain.DefaultBlend = blend;
         }
-
     }
-
 }
