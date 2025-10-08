@@ -12,8 +12,8 @@ public class BattleUIManager : MonoBehaviour
     public TextMeshProUGUI playerHPText;
     public TextMeshProUGUI enemyHPText;
 
-    [Header("Message UI")]
-    public TextMeshProUGUI messageText;
+    [Header("テキスト管理")]
+    public BattleTextManager textManager;
 
     [Header("Skill Buttons")]
     public GameObject skillButtonPrefab;
@@ -86,12 +86,48 @@ public class BattleUIManager : MonoBehaviour
     }
 
     // ================================
-    // メッセージ表示
+    // テキスト関連ラッパー
     // ================================
-    public void ShowMessage(string msg)
+
+    public void ShowTurnText(int turn)
     {
-        if (messageText != null)
-            messageText.text = msg;
+        textManager.ShowTurnText(turn);
+    }
+
+    public void HideTurnText()
+    {
+        textManager.HideTurnText();
+    }
+
+    public void ShowAttackText(bool isPlayerSide, string monsterName, string skillName)
+    {
+        if (isPlayerSide) {
+            textManager.ShowPlayerAttackText(monsterName, skillName);
+        }
+        else {
+            textManager.ShowEnemyAttackText(monsterName, skillName);
+        }
+    }
+
+    public void HideAttackText(bool isPlayerSide)
+    {
+        if (isPlayerSide) {
+            textManager.HidePlayerAttackText();
+        }
+        else {
+            textManager.HideEnemyAttackText();
+        }
+    }
+
+    public void ShowMainText(string message)
+    {
+        textManager.ShowMainText(message);
+    }
+
+    public void ShowBattleResultText(bool playerWon)
+    {
+        string msg = playerWon ? "勝利！" : "敗北…";
+        textManager.ShowMainText(msg, 2.5f);
     }
 
     // ================================
@@ -174,14 +210,6 @@ public class BattleUIManager : MonoBehaviour
     {
         skillPanel.gameObject.SetActive(active);
         namePanel.gameObject.SetActive(active);
-        // foreach (var kv in buttonsByUser)
-        // {
-        //     foreach (var btn in kv.Value)
-        //     {
-        //         if (!btn) continue;
-        //         btn.gameObject.SetActive(active);
-        //     }
-        // }
     }
 
     // ================================

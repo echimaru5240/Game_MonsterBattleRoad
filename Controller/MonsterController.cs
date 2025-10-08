@@ -6,8 +6,8 @@ public class MonsterController : MonoBehaviour
 {
     private Animator animator;
     private CameraManager cameraManager;
-    public MonsterCard cardData;
 
+    public MonsterCard cardData;
     public bool isEnemy;
 
     private Skill currentSkill;

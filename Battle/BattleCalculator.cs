@@ -33,12 +33,12 @@ public static class BattleCalculator
                 mgr.ui.ShowDamagePopup(result.Damage, target.gameObject, false);
                 totalDamage += result.Damage;
 
-                if (!isMultiTarget && result.IsCritical)
-                    mgr.ui.ShowMessage("クリティカルヒット！");
+                // if (!isMultiTarget && result.IsCritical)
+                    // mgr.ui.ShowMessage("クリティカルヒット！");
             }
             else
             {
-                mgr.ui.ShowMessage($"{attacker.cardData.cardName} の攻撃は外れた！");
+                // mgr.ui.ShowMessage($"{attacker.cardData.cardName} の攻撃は外れた！");
             }
         }
 
