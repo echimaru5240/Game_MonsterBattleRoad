@@ -92,8 +92,9 @@ public class BattleManager : MonoBehaviour
 
         // UI初期化
         ui.Init(players, PlayerCurrentHP, PlayerMaxHP, EnemyCurrentHP, EnemyMaxHP, MaxCourage);
+        ui.SetButtonsActive(false);
         ui.OnSkillSelected = OnSkillSelected;
-        ui.ShowMessage("バトル開始！");
+        ui.ShowMainText("バトル開始！");
 
         // 出現
         spawner.Spawn(players, enemies);
@@ -124,7 +125,6 @@ public class BattleManager : MonoBehaviour
         switch (state)
         {
             case BattleState.TURN_START:
-                ui.SetButtonsActive(false);
                 if (finisherReady)
                     ChangeState(BattleState.FINISHER);
                 else
@@ -136,6 +136,7 @@ public class BattleManager : MonoBehaviour
             case BattleState.PLAYER_ACTION_SELECT:
                 ui.SetButtonsActive(true);
                 ui.ResetButtons();
+                ui.ShowTurnText(currentTurn); // ← スキル選択中にターンを表示
                 // ボタン入力を待つ → OnSkillSelected が呼ばれたら EXECUTING へ
                 break;
 
@@ -173,6 +174,8 @@ public class BattleManager : MonoBehaviour
 
         if (AllUsersSelected())
         {
+            ui.SetButtonsActive(false);
+            ui.HideTurnText(); // ← ターン切替時は一旦非表示
             ChangeState(BattleState.EXECUTING);
         }
     }
@@ -189,7 +192,7 @@ public class BattleManager : MonoBehaviour
     // ================================
     private System.Collections.IEnumerator ExecuteFinisher()
     {
-        ui.ShowMessage("とどめの一撃発動！！");
+        ui.ShowMainText("とどめの一撃発動！！");
         yield return new WaitForSeconds(1f);
 
         Card finisherCard = playerCards[0];
@@ -220,8 +223,6 @@ public class BattleManager : MonoBehaviour
     // ================================
     private IEnumerator ExecuteTurn()
     {
-        ui.ShowMessage($"--- {currentTurn} ターン ---");
-
         List<ActionData> turnActions = new();
 
         // プレイヤー行動（フィニッシャー後は空）
@@ -271,7 +272,7 @@ public class BattleManager : MonoBehaviour
         //     ? spawner.EnemyControllers[Random.Range(0, spawner.EnemyControllers.Count)]
         //     : spawner.PlayerControllers[Random.Range(0, spawner.PlayerControllers.Count)];
 
-        ui.ShowMessage($"<b><color=yellow>{user.cardName}</color></b> の {skill.skillName}！");
+        ui.ShowAttackText(isPlayerSide, user.cardName, skill.skillName);
 
         List<MonsterController> targets = new();
 
@@ -315,6 +316,7 @@ public class BattleManager : MonoBehaviour
                 break;
         }
 
+        ui.HideAttackText(isPlayerSide);
         UpdateHPBars();
     }
 
@@ -335,14 +337,14 @@ public class BattleManager : MonoBehaviour
     {
         if (PlayerCurrentHP <= 0)
         {
-            ui.ShowMessage("敗北…");
+            ui.ShowMainText("敗北…");
             ui.DisableButtons();
             ChangeState(BattleState.RESULT);
             return true;
         }
         else if (EnemyCurrentHP <= 0)
         {
-            ui.ShowMessage("勝利！");
+            ui.ShowMainText("勝利！");
             ui.DisableButtons();
             ChangeState(BattleState.RESULT);
             return true;
