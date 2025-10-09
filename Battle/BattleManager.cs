@@ -106,7 +106,6 @@ public class BattleManager : MonoBehaviour
         ResetSelections();
 
         // ? ステージ情報からカメラ設定
-        cameraManager.SetBossMode(stage.isBossStage);
         cameraManager.StartOverviewRotation();
 
         ChangeState(BattleState.TURN_START);
