@@ -42,7 +42,7 @@ public class MonsterController : MonoBehaviour
         Quaternion startRot = transform.rotation;
 
         // ① 正面ショット
-        cameraManager?.PlayFrontShot(transform, isEnemy, 1.0f);
+        cameraManager?.SwitchToFrontCamera(transform, isEnemy);
 
         yield return new WaitForSeconds(1.0f); // 少し見せる
 
@@ -60,6 +60,7 @@ public class MonsterController : MonoBehaviour
             dir.y = 0;
             Quaternion lookRot = Quaternion.LookRotation(dir);
             transform.rotation = lookRot;
+            cameraManager.SwitchToActionCamera(target.transform, isEnemy, transform);
 
             while (t < 1f)
             {
@@ -67,7 +68,7 @@ public class MonsterController : MonoBehaviour
                 transform.position = Vector3.Lerp(start, end, t);
 
                 // 追従カメラ
-                cameraManager?.PlayAttackCamera(transform, isEnemy, 0.5f);
+                // cameraManager?.SwitchToActionCamera(transform, isEnemy);
 
                 yield return null;
             }
@@ -88,17 +89,10 @@ public class MonsterController : MonoBehaviour
             Vector3 start = transform.position;
             Vector3 end = initialPosition; // 攻撃前の座標に戻す
             transform.position = initialPosition;
-            // float t = 0;
-            // while (t < 1f)
-            // {
-            //     t += Time.deltaTime * 1.2f;
-            //     transform.position = Vector3.Lerp(start, end, t);
-            //     yield return null;
-            // }
         }
 
         // 戻ったら全体カメラへ
-        cameraManager?.PlayHitReactionCamera(transform, isEnemy, 0f);
+        cameraManager?.SwitchToOverviewCamera();
 
 
         // ⑤ 次の行動まで少し間を置く（余韻タイム）
@@ -115,8 +109,11 @@ public class MonsterController : MonoBehaviour
             animator.SetTrigger("DoAttack");
 
             // 攻撃時カメラ演出
-            if (cameraManager != null)
-                cameraManager?.PlayAttackCamera(transform, isEnemy, 1.8f);
+            // if (cameraManager != null)
+                // cameraManager.SwitchToActionCamera(transform, isEnemy);
+                // StartCoroutine(cameraManager.MoveCameraAroundAttacker(transform, 3f));
+
+                // cameraManager?.PlayAttackCamera(transform, isEnemy, 1.8f);
         }
     }
 
@@ -131,8 +128,8 @@ public class MonsterController : MonoBehaviour
             animator.SetTrigger("DoHit");
 
             // 被弾時の寄りカメラ
-            if (cameraManager != null)
-                cameraManager?.PlayHitReactionCamera(transform, isEnemy, 1.2f);
+            // if (cameraManager != null)
+            //     cameraManager?.PlayHitReactionCamera(transform, isEnemy, 1.2f);
         }
     }
 

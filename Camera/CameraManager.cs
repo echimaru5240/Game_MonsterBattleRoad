@@ -15,10 +15,9 @@ public class CameraManager : MonoBehaviour
     public CinemachineCamera actionCamera;
 
     private CinemachineBrain brain;
-    private Coroutine currentRoutine;
 
     // ==============================
-    // ? 俯瞰カメラ設定（Inspectorで調整可能）
+    // ? 俯瞰カメラ設定
     // ==============================
     [Header("Overview Rotation Settings")]
     [Tooltip("戦闘の中心点")]
@@ -28,14 +27,10 @@ public class CameraManager : MonoBehaviour
     public float rotationSpeed = 10f;
 
     [Tooltip("回転半径（戦場中心からの距離）")]
-    public float rotationRadius;
-    public float bossRotationRadius;
+    public float rotationRadius = 10f;
 
     [Tooltip("カメラの高さ")]
     public float baseHeight = 5f;
-
-    [Tooltip("ボスモンスターを撮るときのZ軸オフセット")]
-    public float lookAtZOffsetBoss = -2f;
 
     [Tooltip("上下の揺れ幅")]
     public float heightAmplitude = 0.5f;
@@ -49,15 +44,13 @@ public class CameraManager : MonoBehaviour
     [Tooltip("初期角度（度）")]
     public float initialAngle = 45f;
 
-    [Tooltip("ボスを映すときに距離を何倍にするか")]
-    public float bossDistanceMultiplier = 2.0f;
-
     private bool rotateOverview = false;
     private float angle;
-    private bool isBossMode = false;
 
-
-    void Start()
+    // ==============================
+    // 初期化
+    // ==============================
+    private void Start()
     {
         brain = Camera.main.GetComponent<CinemachineBrain>();
         if (brain == null)
@@ -66,93 +59,44 @@ public class CameraManager : MonoBehaviour
             return;
         }
 
-        angle = initialAngle; // ← Inspectorで指定した初期角度からスタート
-        if (isBossMode) {
-            rotationRadius = bossRotationRadius;
-        }
+        angle = initialAngle;
         SetCameraInstant(overviewCamera);
         Debug.Log("[CameraManager] カメラ初期化完了");
     }
 
-    void Update()
+    // ==============================
+    // 更新処理（俯瞰カメラ回転）
+    // ==============================
+    private void Update()
     {
-        if (rotateOverview)
-        {
-            // 回転角度を更新（緩やかなゆらぎ）
-            float speedMod = 1f + Mathf.Sin(Time.time * 0.3f) * 0.2f;
-            angle += rotationSpeed * speedMod * Time.deltaTime;
-            float rad = angle * Mathf.Deg2Rad;
+        if (!rotateOverview) return;
 
-            // 上下ゆれ
-            float yOffset = Mathf.Sin(Time.time * 0.5f) * heightAmplitude;
+        float speedMod = 1f + Mathf.Sin(Time.time * 0.3f) * 0.2f;
+        angle += rotationSpeed * speedMod * Time.deltaTime;
+        float rad = angle * Mathf.Deg2Rad;
 
-            // ズーム変化
-            float currentRadius = rotationRadius + Mathf.Sin(Time.time * zoomSpeed) * zoomAmplitude;
+        float yOffset = Mathf.Sin(Time.time * 0.5f) * heightAmplitude;
+        float currentRadius = rotationRadius + Mathf.Sin(Time.time * zoomSpeed) * zoomAmplitude;
 
-            // カメラ位置
-            Vector3 offset = new Vector3(Mathf.Sin(rad), 0, Mathf.Cos(rad)) * currentRadius;
-            Vector3 pos = battleCenter + offset + Vector3.up * (baseHeight + yOffset);
+        Vector3 offset = new Vector3(Mathf.Sin(rad), 0, Mathf.Cos(rad)) * currentRadius;
+        Vector3 pos = battleCenter + offset + Vector3.up * (baseHeight + yOffset);
 
-            overviewCamera.transform.position = pos;
-            overviewCamera.transform.LookAt(battleCenter + Vector3.up * 1.5f);
-        }
-    }
-
-    public void SetBossMode(bool isBoss)
-    {
-        isBossMode = isBoss;
-        Debug.Log($"[CameraManager] ボスモード: {isBoss}");
+        overviewCamera.transform.position = pos;
+        overviewCamera.transform.LookAt(battleCenter + Vector3.up * 1.5f);
     }
 
     // ==============================
-    // 回転制御
+    // 公開制御関数
     // ==============================
-    public void StartOverviewRotation()
-    {
-        rotateOverview = true;
-    }
+    public void StartOverviewRotation() => rotateOverview = true;
+    public void StopOverviewRotation() => rotateOverview = false;
 
-    public void StopOverviewRotation()
+    public void SwitchToFrontCamera(Transform target, bool isEnemy)
     {
-        rotateOverview = false;
-    }
-
-    public void PlayFrontShot(Transform attacker, bool isEnemy, float duration = 1.5f, bool isBoss = false)
-    {
-        if (currentRoutine != null) StopCoroutine(currentRoutine);
-        currentRoutine = StartCoroutine(SwitchToFront(attacker, isEnemy, duration, isBoss));
-    }
-
-    /// <summary>
-    /// 攻撃時のカメラ演出
-    /// </summary>
-    public void PlayAttackCamera(Transform attacker, bool isEnemy, float duration = 0f)
-    {
-        if (currentRoutine != null) StopCoroutine(currentRoutine);
-        currentRoutine = StartCoroutine(SwitchToAction(attacker, isEnemy, duration));
-    }
-
-    /// <summary>
-    /// 被弾時のカメラ寄り演出
-    /// </summary>
-    public void PlayHitReactionCamera(Transform target, bool isEnemy, float duration = 1f)
-    {
-        if (currentRoutine != null) StopCoroutine(currentRoutine);
-        currentRoutine = StartCoroutine(SwitchToHit(target, isEnemy, duration));
-    }
-
-    // ==============================
-    // 内部演出コルーチン
-    // ==============================
-    private IEnumerator SwitchToFront(Transform target, bool isEnemy, float duration, bool isBoss)
-    {
-        float distance = 8f;
+        float distance = 10f;
 
         if (isEnemy)
         {
-            if (isBossMode) {
-                distance = 10f * bossDistanceMultiplier;
-            }
             SetupCameraFollow(actionCamera, target, isEnemy, Vector3.zero, distance);
             actionCamera.transform.rotation = Quaternion.Euler(30f, -20f, 0);
         }
@@ -163,51 +107,91 @@ public class CameraManager : MonoBehaviour
         }
 
         SetCameraInstant(actionCamera);
-        yield return new WaitForSeconds(duration);
     }
 
-    private IEnumerator SwitchToAction(Transform target, bool isEnemy, float duration)
+    /// <summary>
+    /// 攻撃開始時などにアクションカメラへ即切り替え
+    /// </summary>
+    public void SwitchToActionCamera2(Transform target, bool isEnemy)
     {
-        float distance = 10f;
+        if (target == null || actionCamera == null) return;
 
         StopOverviewRotation();
-        if (isEnemy && isBossMode) {
-            distance *= bossDistanceMultiplier;
-        }
-        SetupCameraFollow(actionCamera, target, isEnemy, Vector3.zero, distance);
+
+        float distance = 15f;
+        // SetupCameraFollow(actionCamera, target, isEnemy, Vector3.zero, distance);
+        SetupCameraLookOnly(actionCamera, target);
         SetCameraInstant(actionCamera);
-        yield return new WaitForSeconds(duration);
-        SetCamera(overviewCamera);
+
+    }
+    /// <summary>
+    /// 攻撃開始時などにアクションカメラへ即切り替え
+    /// ターゲットを向き続けながら、Z座標のみ移動する
+    /// </summary>
+    public void SwitchToActionCamera(Transform target, bool isEnemy, Transform attacker)
+    {
+        if (target == null || actionCamera == null || attacker == null) return;
+
+        StopOverviewRotation();
+
+        // --- 1?? 現在のカメラ位置を取得 ---
+        Vector3 startPos = actionCamera.transform.position;
+
+        // --- 2?? 目標Z座標を計算（攻撃者のZ * 2）---
+        float targetZ = attacker.position.z * 2.5f;
+        float targetX = target.position.x + 3f;
+
+        // --- 3?? 新しい位置（Zだけ変更）---
+        Vector3 endPos = new Vector3(targetX, startPos.y, targetZ);
+
+        // --- 4?? カメラを即時切り替え（LookAt維持）---
+        SetCameraInstant(actionCamera);
+        SetupCameraLookOnly(actionCamera, target);
+
+        // --- 5?? コルーチンでZ方向スライド ---
+        StartCoroutine(MoveCameraZSmooth(startPos, endPos, attacker, 0.7f));
+    }
+
+    /// <summary>
+    /// カメラのZ座標だけをスムーズに移動させる
+    /// </summary>
+    private IEnumerator MoveCameraZSmooth(Vector3 startPos, Vector3 endPos, Transform lookTarget, float duration)
+    {
+        float t = 0f;
+
+        while (t < 1f)
+        {
+            t += Time.deltaTime / duration;
+
+            // 現在位置を補間（Zのみ変化）
+            float z = Mathf.Lerp(startPos.z, endPos.z, t);
+            Vector3 newPos = new Vector3(startPos.x, startPos.y, z);
+            actionCamera.transform.position = newPos;
+
+            // ターゲットを向き続ける
+            if (lookTarget != null)
+                actionCamera.transform.LookAt(lookTarget.position + Vector3.up * 1.5f);
+
+            yield return null;
+        }
+    }
+
+    /// <summary>
+    /// 攻撃終了時などに俯瞰カメラへ即切り替え
+    /// </summary>
+    public void SwitchToOverviewCamera()
+    {
+        SetCameraInstant(overviewCamera);
         StartOverviewRotation();
     }
 
-    private IEnumerator SwitchToHit(Transform target, bool isEnemy, float duration)
-    {
-        SetupCameraFollow(actionCamera, target, isEnemy, Vector3.zero, 3.5f);
-        SetCamera(actionCamera);
-        yield return new WaitForSeconds(duration);
-        SetCamera(overviewCamera);
-    }
-
     // ==============================
-    // Cinemachine設定
+    // 内部Cinemachine設定
     // ==============================
-    private void SetupCameraFollow(CinemachineCamera cam, Transform target, bool isEnemy,  Vector3 offset, float distance)
+    private void SetupCameraFollow(CinemachineCamera cam, Transform target, bool isEnemy, Vector3 offset, float distance)
     {
         cam.Follow = target;
         cam.LookAt = target;
-
-        if (isBossMode && isEnemy) {
-            // 現在のカメラ位置を取得
-            Vector3 camPos = cam.transform.position;
-
-            // targetのforward方向に、Zオフセットを加算（位置のみ移動）
-            camPos += target.forward * lookAtZOffsetBoss;
-            camPos += target.right * -5;
-
-            // カメラの位置を更新（向きは変更しない）
-            cam.transform.position = camPos;
-        }
 
         if (cam.TryGetComponent(out CinemachinePositionComposer composer))
         {
@@ -221,16 +205,36 @@ public class CameraManager : MonoBehaviour
     }
 
     /// <summary>
-    /// 優先度でカメラを切り替える
+    /// カメラの位置はそのまま、向きだけターゲットを追う設定
     /// </summary>
-    private void SetCamera(CinemachineCamera cam)
+    private void SetupCameraLookOnly(CinemachineCamera cam, Transform target)
     {
-        overviewCamera.Priority = 0;
-        actionCamera.Priority = 0;
-        cam.Priority = 10;
+        if (cam == null || target == null) return;
+
+        // Followは固定。LookAtのみターゲットへ
+        cam.Follow = null;
+        cam.LookAt = target;
+
+        // 現在位置を維持したまま向きだけ更新
+        if (cam.TryGetComponent(out CinemachinePositionComposer composer))
+        {
+            // 位置制御を無効化（距離などを動かさないようにする）
+            composer.CameraDistance = Vector3.Distance(cam.transform.position, target.position);
+            composer.TargetOffset = Vector3.zero;
+        }
+
+        // 即座にターゲット方向を向く（Transformで強制更新）
+        Vector3 dir = (target.position - cam.transform.position).normalized;
+        if (dir.sqrMagnitude > 0.001f)
+        {
+            cam.transform.rotation = Quaternion.LookRotation(dir, Vector3.up);
+        }
     }
 
-    public void SetCameraInstant(CinemachineCamera cam)
+    // ==============================
+    // カメラ優先度切り替え
+    // ==============================
+    private void SetCameraInstant(CinemachineCamera cam)
     {
         overviewCamera.Priority = 0;
         actionCamera.Priority = 0;
@@ -238,8 +242,7 @@ public class CameraManager : MonoBehaviour
 
         if (brain != null)
         {
-            var blend = new CinemachineBlendDefinition(
-                CinemachineBlendDefinition.Styles.Cut, 0f);
+            var blend = new CinemachineBlendDefinition(CinemachineBlendDefinition.Styles.Cut, 0f);
             brain.DefaultBlend = blend;
         }
     }
