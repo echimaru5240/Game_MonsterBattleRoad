@@ -2,21 +2,26 @@ using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 
 public class BattleUIManager : MonoBehaviour
 {
     [Header("HP UI")]
     public Slider playerHPBar;
+    public GameObject playerHPBarBackGround;
     public Slider enemyHPBar;
+    public GameObject enemyHPBarBackGround;
     public TextMeshProUGUI playerHPText;
     public TextMeshProUGUI enemyHPText;
 
     [Header("テキスト管理")]
     public BattleTextManager textManager;
 
+    public Transform selectPanel;
     [Header("Skill Buttons")]
-    public GameObject skillButtonPrefab;
+    public GameObject skillButtonPrefabRed;
+    public GameObject skillButtonPrefabBlue;
     public Transform skillPanel;
 
     [Header("Names")]
@@ -40,17 +45,33 @@ public class BattleUIManager : MonoBehaviour
     private readonly Color selectedBtnColor = new Color(1f, 111f / 255f, 0f, 1f);
     private readonly Color disabledBtnColor = new Color(0.8f, 0.8f, 0.8f, 1f);
 
+    private Coroutine playerHpRoutine;
+    private Coroutine enemyHpRoutine;
+    private int m_OldPlayerHP;
+    private int m_OldEnemyHP;
+
+
     // ================================
     // 初期化
     // ================================
     public void Init(MonsterCard[] playerCards, int playerHP, int playerMaxHP, int enemyHP, int enemyMaxHP, int courageMax = 100)
     {
         // HPバー初期化
-        playerHPBar.maxValue = playerMaxHP;
-        playerHPBar.value = playerHP;
-        enemyHPBar.maxValue = enemyMaxHP;
-        enemyHPBar.value = enemyHP;
+        // playerHPBar.maxValue = 1000;
+        // playerHPBar.value = playerHP % 1000;
+        // playerHPText.text = $"{playerHP} / {playerMaxHP}";
+        // UpdateHPBarColor(playerHPBar, playerHPBarBackGround, playerMaxHP);
+        // // 前回HPを初期化
+        // m_OldPlayerHP = playerHP;
 
+        // enemyHPBar.maxValue = 1000;
+        // enemyHPBar.value = enemyHP % 1000;
+        // enemyHPText.text = $"{enemyHP} / {enemyMaxHP}";
+        // UpdateHPBarColor(enemyHPBar, enemyHPBarBackGround, enemyMaxHP);
+        // m_OldEnemyHP  = enemyHP;
+
+        m_OldPlayerHP = 0;
+        m_OldEnemyHP = 0;
         UpdateHP(playerHP, playerMaxHP, enemyHP, enemyMaxHP);
 
         // 勇気ゲージ初期化
@@ -60,6 +81,7 @@ public class BattleUIManager : MonoBehaviour
             courageBar.value = 0;
         }
 
+        selectPanel.gameObject.SetActive(true);
         GenerateSkillButtons(playerCards);
         GeneratePlayerNames(playerCards);
     }
@@ -69,11 +91,206 @@ public class BattleUIManager : MonoBehaviour
     // ================================
     public void UpdateHP(int playerHP, int playerMax, int enemyHP, int enemyMax)
     {
-        playerHPBar.value = playerHP;
-        enemyHPBar.value = enemyHP;
         playerHPText.text = $"{playerHP} / {playerMax}";
         enemyHPText.text = $"{enemyHP} / {enemyMax}";
+
+
+        // HPバーを徐々に変化
+        if (playerHpRoutine != null) StopCoroutine(playerHpRoutine);
+        if (enemyHpRoutine != null) StopCoroutine(enemyHpRoutine);
+
+        playerHpRoutine = StartCoroutine(SmoothHPChangeSegmented(playerHPBar, playerHPBarBackGround, playerHP, m_OldPlayerHP));
+        enemyHpRoutine = StartCoroutine(SmoothHPChangeSegmented(enemyHPBar, enemyHPBarBackGround, enemyHP, m_OldEnemyHP));
+
+        m_OldPlayerHP = playerHP;
+        m_OldEnemyHP = enemyHP;
     }
+
+    private IEnumerator SmoothHPChangeSegmented(Slider bar, GameObject background, int toHP, int fromHP)
+    {
+        if (bar == null || fromHP == toHP)
+        {
+            // 最終色・背景だけ整える
+            UpdateHPBarColor(bar, background, toHP);
+            bar.maxValue = 1000;
+            bar.value = HPInStageValue(toHP, true);
+            yield break;
+        }
+
+        // 総アニメ時間は常に 0.8秒
+        const float totalDuration = 0.5f;
+        int totalDelta = Mathf.Abs(toHP - fromHP);
+
+        // 現在の見た目値（途中で割り込まれた時の連続性を保つため）
+        float visualStart = bar.value;
+        bar.maxValue = 1000;
+
+        // 区間生成（1000境界で分割）
+        var segments = BuildSegments(fromHP, toHP);  // List<(int segFrom, int segTo)>
+
+        bool first = true;
+        foreach (var seg in segments)
+        {
+            int segFrom = seg.segFrom;
+            int segTo   = seg.segTo;
+            int segDelta = Mathf.Abs(segFrom - segTo);
+            float segDuration = totalDuration * (segDelta / (float)totalDelta);
+
+            // 区間開始時点の色を適用
+            UpdateHPBarColor(bar, background, segFrom);
+
+            // 現段階内でのバー値を計算
+            float startVal = HPInStageValue(segFrom, false, segTo < segFrom);
+            float endVal   = HPInStageValue(segTo, true, segTo < segFrom);
+
+            Debug.Log($"Segment: {segFrom}→{segTo}, startVal={startVal}, endVal={endVal}, duration={segDuration}");
+
+            // 区間アニメーション
+            float t = 0f;
+            float start = startVal; // 現在値から補間
+            while (t < segDuration)
+            {
+                t += Time.deltaTime;
+                float u = Mathf.Clamp01(t / segDuration);
+                bar.value = Mathf.Lerp(start, endVal, u);
+                yield return null;
+            }
+            bar.value = endVal;
+        }
+
+
+        // 最終色・背景を確定
+        UpdateHPBarColor(bar, background, toHP);
+    }
+
+    private struct HpSeg { public int segFrom; public int segTo; public HpSeg(int f,int t){segFrom=f;segTo=t;} }
+
+    private List<HpSeg> BuildSegments(int fromHP, int toHP)
+    {
+        var list = new List<HpSeg>();
+
+        if (toHP < fromHP) // ダメージ（減少方向）
+        {
+            int cur = fromHP;
+            while (cur > toHP)
+            {
+                int lowerBoundary = ((cur - 1) / 1000) * 1000; // その段の下限（例:1500→1000）
+                int segTo = Mathf.Max(toHP, lowerBoundary);
+                list.Add(new HpSeg(cur, segTo));
+                cur = segTo;
+            }
+        }
+        else // 回復（増加方向）も一応対応
+        {
+            int cur = fromHP;
+            while (cur < toHP)
+            {
+                int upperBoundary = ((cur) / 1000 + 1) * 1000; // その段の上限（例:1200→2000）
+                int segTo = Mathf.Min(toHP, upperBoundary);
+                list.Add(new HpSeg(cur, segTo));
+                cur = segTo;
+            }
+        }
+
+        return list;
+    }
+
+    private int HPInStageValue(int hp, bool isEnd, bool isDamage = false)
+    {
+        int ret;
+
+        if (hp <= 0) return 0;
+        int v = hp % 1000;
+        if (v == 0 && hp > 0) {
+            if ( ( isEnd && isDamage )|| ( !isEnd && !isDamage ) ){
+                ret = 0;
+            }
+            else {
+                ret = 1000;
+            }
+        }
+        else {
+            ret =  v;
+        }
+
+        return ret;
+    }
+
+    private IEnumerator SmoothHPChange(Slider bar, GameObject background, int hp, int m_OldHp)
+    {
+        if (bar == null) yield break;
+
+        int hpBarDiff = (m_OldHp - 1) % 1000 - (hp - 1) % 1000;
+        float startValue = bar.value;
+        float targetValue = hp % 1000;
+        if (targetValue == 0 && hp > 0) targetValue = 1000;
+
+        float duration = 0.8f; // アニメーション速度（秒）
+        float elapsed = 0f;
+
+        while (elapsed < duration)
+        {
+            elapsed += Time.deltaTime;
+            bar.value = Mathf.Lerp(startValue, targetValue, elapsed / duration);
+            yield return null;
+        }
+
+        bar.value = targetValue;
+
+        // 色・背景更新
+        UpdateHPBarColor(bar, background, hp);
+    }
+
+    private void UpdateHPBarColor(Slider bar, GameObject background, int hp)
+    {
+        if (bar == null) return;
+
+        // HPごとの段階を計算（1?1000:第1段階、1001?2000:第2段階、...）
+        int stage = Mathf.Clamp((hp - 1) / 1000, 0, 4); // 0?4段階に制限（最大5000HP想定）
+
+        // Fill Area のイメージを取得
+        var fill = bar.fillRect.GetComponentInChildren<Image>();
+        if (fill == null) return;
+
+        // デフォルト透明背景
+        if (background != null)
+            background.GetComponent<Image>().color = new Color(1, 1, 1, 0); // 完全透明
+
+        // HP段階に応じて色を切り替え
+        switch (stage)
+        {
+            case 0: // 1?1000
+                fill.color = Color.red;
+                if (background != null)
+                    background.GetComponent<Image>().color = new Color(1, 1, 1, 0); // 背景透明
+                break;
+
+            case 1: // 1001?2000
+                fill.color = Color.yellow;
+                if (background != null)
+                    background.GetComponent<Image>().color = Color.red;
+                break;
+
+            case 2: // 2001?3000
+                fill.color = Color.green;
+                if (background != null)
+                    background.GetComponent<Image>().color = Color.yellow;
+                break;
+
+            case 3: // 3001?4000
+                fill.color = Color.cyan;
+                if (background != null)
+                    background.GetComponent<Image>().color = Color.green;
+                break;
+
+            default: // 4001以上
+                fill.color = Color.magenta;
+                if (background != null)
+                    background.GetComponent<Image>().color = Color.cyan;
+                break;
+        }
+}
+
 
     // ================================
     // 勇気ゲージ更新
@@ -145,10 +362,11 @@ public class BattleUIManager : MonoBehaviour
             for (int skillIndex = 0; skillIndex < playerCards[userIndex].skills.Length; skillIndex++)
             {
                 var skill = playerCards[userIndex].skills[skillIndex];
-                GameObject buttonObj = Instantiate(skillButtonPrefab, skillPanel);
+                GameObject prefab = (skillIndex % 2 == 0) ? skillButtonPrefabRed : skillButtonPrefabBlue;
+                GameObject buttonObj = Instantiate(prefab, skillPanel);
                 buttonObj.GetComponentInChildren<TextMeshProUGUI>().text = skill.skillName;
 
-                Button btn = buttonObj.GetComponent<Button>();
+                Button btn = buttonObj.GetComponentInChildren<Button>();
                 buttonsByUser[userIndex].Add(btn);
 
                 int u = userIndex;
@@ -208,8 +426,9 @@ public class BattleUIManager : MonoBehaviour
 
     public void SetButtonsActive(bool active)
     {
-        skillPanel.gameObject.SetActive(active);
-        namePanel.gameObject.SetActive(active);
+        selectPanel.gameObject.SetActive(active);
+        // skillPanel.gameObject.SetActive(active);
+        // namePanel.gameObject.SetActive(active);
     }
 
     // ================================
@@ -254,7 +473,7 @@ public class BattleUIManager : MonoBehaviour
         popup.transform.position = Camera.main.WorldToScreenPoint(worldPos);
 
         var dmgText = popup.GetComponent<DamageText>().textMesh;
-        dmgText.text = (isHeal ? "+" : "-") + value.ToString();
+        dmgText.text = value.ToString();
         dmgText.color = isHeal ? Color.green : Color.red;
     }
 

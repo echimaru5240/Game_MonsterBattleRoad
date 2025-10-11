@@ -121,17 +121,57 @@ public class MonsterController : MonoBehaviour
     /// <summary>
     /// 被弾アニメーション＋カメラ演出
     /// </summary>
-    public void PlayHit()
+    public void PlayHit(Transform attacker)
     {
         if (animator != null)
         {
             animator.SetTrigger("DoHit");
 
+            // 吹き飛び演出
+            if (attacker != null)
+                StartCoroutine(Knockback(attacker));
             // 被弾時の寄りカメラ
             // if (cameraManager != null)
             //     cameraManager?.PlayHitReactionCamera(transform, isEnemy, 1.2f);
         }
     }
+
+    /// <summary>
+    /// 攻撃を受けた時に吹き飛ぶ演出
+    /// </summary>
+    public IEnumerator Knockback(Transform attacker, float power = 3f, float duration = 0.3f)
+    {
+        if (attacker == null) yield break;
+
+        Vector3 start = transform.position;
+
+        // 攻撃者 → 被弾者 方向ベクトル
+        Vector3 dir = (transform.position - attacker.position).normalized;
+        dir.y = 0f; // 上方向は不要（地面で水平に飛ばす）
+
+        // 吹き飛び先の位置
+        Vector3 end = start + dir * power;
+
+        float t = 0f;
+        while (t < 1f)
+        {
+            t += Time.deltaTime / duration;
+            transform.position = Vector3.Lerp(start, end, t);
+
+            // パラボラっぽく少し上に浮く演出
+            float height = Mathf.Sin(t * Mathf.PI) * 0.5f;
+            transform.position += Vector3.up * height;
+
+            yield return null;
+        }
+
+        // 最後に少しバウンド（オプション）
+        yield return new WaitForSeconds(0.1f);
+        transform.position = end;
+        yield return new WaitForSeconds(1f);
+        transform.position = start;
+}
+
 
     /// <summary>
     /// 戦闘不能
@@ -150,6 +190,10 @@ public class MonsterController : MonoBehaviour
     public void OnAttackHit()
     {
         BattleCalculator.OnAttackHit(this, currentSkill, currentTargets);
+        foreach (var target in currentTargets)
+        {
+            target.PlayHit(transform); // ← 自分を渡すことで方向が決まる
+        }
         Debug.Log("OnAttackHit");
     }
 

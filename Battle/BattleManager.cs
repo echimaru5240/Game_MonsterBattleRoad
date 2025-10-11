@@ -74,7 +74,7 @@ public class BattleManager : MonoBehaviour
     // ================================
     // セットアップ
     // ================================
-    public void SetupBattle(MonsterCard[] players, BattleStageData stage, System.Action<bool, int> onEnd, int initialCourage)
+    public IEnumerator SetupBattle(MonsterCard[] players, BattleStageData stage, System.Action<bool, int> onEnd, int initialCourage)
     {
         playerCards = players;
         enemyCards = stage.enemyTeam;
@@ -90,15 +90,18 @@ public class BattleManager : MonoBehaviour
         courageGauge = initialCourage;
         finisherReady = (courageGauge >= MaxCourage);
 
+        // 出現
+        spawner.SetSpawnAreaPositions(stage.isBossStage);
+        spawner.Spawn(players, stage.enemyTeam);
+
+
         // UI初期化
         ui.Init(players, PlayerCurrentHP, PlayerMaxHP, EnemyCurrentHP, EnemyMaxHP, MaxCourage);
+        yield return new WaitForSeconds(2.0f);
         ui.SetButtonsActive(false);
         ui.OnSkillSelected = OnSkillSelected;
         ui.ShowMainText("バトル開始！");
 
-        // 出現
-        spawner.SetSpawnAreaPositions(stage.isBossStage);
-        spawner.Spawn(players, stage.enemyTeam);
 
         selectedByUser = new int[players.Length];
         for (int i = 0; i < selectedByUser.Length; i++) selectedByUser[i] = -1;
@@ -157,7 +160,7 @@ public class BattleManager : MonoBehaviour
                 break;
 
             case BattleState.RESULT:
-                EndBattle(PlayerCurrentHP > 0);
+                StartCoroutine(EndBattle(PlayerCurrentHP > 0));
                 break;
         }
     }
@@ -194,7 +197,7 @@ public class BattleManager : MonoBehaviour
     // ================================
     // フィニッシャー
     // ================================
-    private System.Collections.IEnumerator ExecuteFinisher()
+    private IEnumerator ExecuteFinisher()
     {
         ui.ShowMainText("とどめの一撃発動！！");
         yield return new WaitForSeconds(1f);
@@ -206,6 +209,8 @@ public class BattleManager : MonoBehaviour
             ShowDamagePopup(dmg / spawner.EnemyObjects.Count, enemy, false);
 
         EnemyCurrentHP = Mathf.Max(0, EnemyCurrentHP - dmg);
+
+        UpdateHPBars();
 
         courageGauge = 0;
         finisherReady = false;
@@ -356,8 +361,9 @@ public class BattleManager : MonoBehaviour
         return false;
     }
 
-    private void EndBattle(bool playerWon)
+    private IEnumerator EndBattle(bool playerWon)
     {
+        yield return new WaitForSeconds(1f);
         onBattleEnd?.Invoke(playerWon, courageGauge);
     }
 
