@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.UI;
 
 [CreateAssetMenu(menuName = "Card/MonsterCard")]
 public class MonsterCard : Card
@@ -15,6 +16,7 @@ public class MonsterCard : Card
 
     [Header("•\Ž¦—p")]
     public GameObject prefab;
+    public Sprite monsterSprite;
 
     private void OnEnable()
     {

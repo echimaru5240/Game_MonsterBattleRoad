@@ -109,6 +109,22 @@ public class CameraManager : MonoBehaviour
         SetCameraInstant(actionCamera);
     }
 
+    // ==============================
+    // リザルトカメラ演出
+    // ==============================
+    public void SwitchToResultCamera()
+    {
+        StopOverviewRotation();
+
+        // カメラ位置・向き設定（後方からやや上）
+        actionCamera.transform.position = new Vector3(0f, 5f, -20f);
+        actionCamera.transform.rotation = Quaternion.Euler(10f, 0f, 0f);
+
+        // カメラを即時切り替え
+        SetCameraInstant(actionCamera);
+    }
+
+
     /// <summary>
     /// 攻撃開始時などにアクションカメラへ即切り替え
     /// </summary>
@@ -124,6 +140,7 @@ public class CameraManager : MonoBehaviour
         SetCameraInstant(actionCamera);
 
     }
+
     /// <summary>
     /// 攻撃開始時などにアクションカメラへ即切り替え
     /// ターゲットを向き続けながら、Z座標のみ移動する

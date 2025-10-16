@@ -30,7 +30,7 @@ public static class BattleCalculator
 
             if (!result.IsMiss)
             {
-                mgr.ui.ShowDamagePopup(result.Damage, target.gameObject, false);
+                mgr.battleUIManager.ShowDamagePopup(result.Damage, target.gameObject, false);
                 totalDamage += result.Damage;
 
                 // if (!isMultiTarget && result.IsCritical)

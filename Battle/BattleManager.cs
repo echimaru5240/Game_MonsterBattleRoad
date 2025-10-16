@@ -42,7 +42,10 @@ public class BattleManager : MonoBehaviour
     private void Awake() => Instance = this;
 
     [Header("References")]
-    public BattleUIManager ui;
+    public BattleUIManager battleUIManager;
+    [SerializeField] private GameObject battleUIPanel;
+    [SerializeField] private BattleResultUIManager resultUIManager;
+    [SerializeField] private GameObject resultUIPanel;
     public BattleSpawner spawner;
     [SerializeField] private CameraManager cameraManager;
 
@@ -76,9 +79,14 @@ public class BattleManager : MonoBehaviour
     // ================================
     public IEnumerator SetupBattle(MonsterCard[] players, BattleStageData stage, System.Action<bool, int> onEnd, int initialCourage)
     {
+        battleUIPanel.SetActive(true);
+        resultUIPanel.SetActive(false);
         playerCards = players;
         enemyCards = stage.enemyTeam;
         onBattleEnd = onEnd;
+
+        // 戦闘BGM再生
+        AudioManager.Instance.PlayBGM(stage.bgm);
 
         // HP初期化
         PlayerMaxHP = SumHP(players);
@@ -96,11 +104,8 @@ public class BattleManager : MonoBehaviour
 
 
         // UI初期化
-        ui.Init(players, PlayerCurrentHP, PlayerMaxHP, EnemyCurrentHP, EnemyMaxHP, MaxCourage);
-        yield return new WaitForSeconds(2.0f);
-        ui.SetButtonsActive(false);
-        ui.OnSkillSelected = OnSkillSelected;
-        ui.ShowMainText("バトル開始！");
+        battleUIManager.Init(players, PlayerCurrentHP, PlayerMaxHP, EnemyCurrentHP, EnemyMaxHP, MaxCourage);
+        battleUIManager.OnSkillSelected = OnSkillSelected;
 
 
         selectedByUser = new int[players.Length];
@@ -109,7 +114,9 @@ public class BattleManager : MonoBehaviour
         ResetSelections();
 
         // ? ステージ情報からカメラ設定
-        cameraManager.StartOverviewRotation();
+        cameraManager.SwitchToOverviewCamera();
+        battleUIManager.ShowMainText("バトル開始！");
+        yield return new WaitForSeconds(2.0f);
 
         ChangeState(BattleState.TURN_START);
     }
@@ -141,9 +148,9 @@ public class BattleManager : MonoBehaviour
                 break;
 
             case BattleState.PLAYER_ACTION_SELECT:
-                ui.SetButtonsActive(true);
-                ui.ResetButtons();
-                ui.ShowTurnText(currentTurn); // ← スキル選択中にターンを表示
+                battleUIManager.SetButtonsActive(true);
+                battleUIManager.ResetButtons();
+                battleUIManager.ShowTurnText(currentTurn); // ← スキル選択中にターンを表示
                 // ボタン入力を待つ → OnSkillSelected が呼ばれたら EXECUTING へ
                 break;
 
@@ -160,7 +167,7 @@ public class BattleManager : MonoBehaviour
                 break;
 
             case BattleState.RESULT:
-                StartCoroutine(EndBattle(PlayerCurrentHP > 0));
+                EndBattle(PlayerCurrentHP > 0);
                 break;
         }
     }
@@ -181,8 +188,8 @@ public class BattleManager : MonoBehaviour
 
         if (AllUsersSelected())
         {
-            ui.SetButtonsActive(false);
-            ui.HideTurnText(); // ← ターン切替時は一旦非表示
+            battleUIManager.SetButtonsActive(false);
+            battleUIManager.HideTurnText(); // ← ターン切替時は一旦非表示
             ChangeState(BattleState.EXECUTING);
         }
     }
@@ -199,7 +206,7 @@ public class BattleManager : MonoBehaviour
     // ================================
     private IEnumerator ExecuteFinisher()
     {
-        ui.ShowMainText("とどめの一撃発動！！");
+        battleUIManager.ShowMainText("とどめの一撃発動！！");
         yield return new WaitForSeconds(1f);
 
         Card finisherCard = playerCards[0];
@@ -214,7 +221,7 @@ public class BattleManager : MonoBehaviour
 
         courageGauge = 0;
         finisherReady = false;
-        ui.UpdateCourage(courageGauge, MaxCourage);
+        battleUIManager.UpdateCourage(courageGauge, MaxCourage);
 
         yield return new WaitForSeconds(0.5f);
 
@@ -281,7 +288,7 @@ public class BattleManager : MonoBehaviour
         //     ? spawner.EnemyControllers[Random.Range(0, spawner.EnemyControllers.Count)]
         //     : spawner.PlayerControllers[Random.Range(0, spawner.PlayerControllers.Count)];
 
-        ui.ShowAttackText(isPlayerSide, user.cardName, skill.skillName);
+        battleUIManager.ShowAttackText(isPlayerSide, user.cardName, skill.skillName);
 
         List<MonsterController> targets = new();
 
@@ -325,7 +332,7 @@ public class BattleManager : MonoBehaviour
                 break;
         }
 
-        ui.HideAttackText(isPlayerSide);
+        battleUIManager.HideAttackText(isPlayerSide);
         UpdateHPBars();
     }
 
@@ -336,7 +343,7 @@ public class BattleManager : MonoBehaviour
     {
         courageGauge = Mathf.Min(courageGauge + amount, MaxCourage);
         if (courageGauge >= MaxCourage) finisherReady = true;
-        ui.UpdateCourage(courageGauge, MaxCourage);
+        battleUIManager.UpdateCourage(courageGauge, MaxCourage);
     }
 
     // ================================
@@ -346,25 +353,42 @@ public class BattleManager : MonoBehaviour
     {
         if (PlayerCurrentHP <= 0)
         {
-            ui.ShowMainText("敗北…");
-            ui.DisableButtons();
+            battleUIManager.ShowMainText("敗北…");
+            battleUIManager.DisableButtons();
             ChangeState(BattleState.RESULT);
             return true;
         }
         else if (EnemyCurrentHP <= 0)
         {
-            ui.ShowMainText("勝利！");
-            ui.DisableButtons();
+            battleUIManager.ShowMainText("勝利！");
+            battleUIManager.DisableButtons();
             ChangeState(BattleState.RESULT);
             return true;
         }
         return false;
     }
 
-    private IEnumerator EndBattle(bool playerWon)
+    private void EndBattle(bool playerWon)
     {
-        yield return new WaitForSeconds(1f);
-        onBattleEnd?.Invoke(playerWon, courageGauge);
+        battleUIPanel.SetActive(false);
+        resultUIPanel.SetActive(true);
+
+        // リザルトBGM再生
+        AudioManager.Instance.PlayBGM(playerWon ? AudioManager.Instance.victoryBGM : AudioManager.Instance.defeatBGM);
+
+        spawner.SetResultObject();
+        cameraManager.SwitchToResultCamera();
+        List<MonsterController> playerControllers = new();
+        playerControllers.AddRange(spawner.PlayerControllers);
+        foreach (var playerController in playerControllers )
+            playerController.PlayResultWin(true);
+
+        resultUIManager.ShowResult(playerWon, () =>
+        {
+            foreach (var playerController in playerControllers )
+                playerController.PlayResultWin(false);
+            onBattleEnd?.Invoke(playerWon, courageGauge);
+        });
     }
 
     private void ResetSelections()
@@ -374,11 +398,11 @@ public class BattleManager : MonoBehaviour
 
     public void UpdateHPBars()
     {
-        ui.UpdateHP(PlayerCurrentHP, PlayerMaxHP, EnemyCurrentHP, EnemyMaxHP);
+        battleUIManager.UpdateHP(PlayerCurrentHP, PlayerMaxHP, EnemyCurrentHP, EnemyMaxHP);
     }
 
     private void ShowDamagePopup(int value, GameObject target, bool isHeal = false)
     {
-        ui.ShowDamagePopup(value, target, isHeal);
+        battleUIManager.ShowDamagePopup(value, target, isHeal);
     }
 }
