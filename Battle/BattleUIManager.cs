@@ -18,15 +18,9 @@ public class BattleUIManager : MonoBehaviour
     [Header("テキスト管理")]
     public BattleTextManager textManager;
 
-    public Transform selectPanel;
     [Header("Skill Buttons")]
-    public GameObject skillButtonPrefabRed;
-    public GameObject skillButtonPrefabBlue;
-    public Transform skillPanel;
-
-    [Header("Names")]
-    public GameObject playerNamePrefab;
-    public Transform namePanel;
+    public Transform selectPanelParent;
+    public GameObject selectPanelPrefab;
 
     [Header("Damage Popup")]
     public GameObject damageTextPrefab;
@@ -57,19 +51,6 @@ public class BattleUIManager : MonoBehaviour
     public void Init(MonsterCard[] playerCards, int playerHP, int playerMaxHP, int enemyHP, int enemyMaxHP, int courageMax = 100)
     {
         // HPバー初期化
-        // playerHPBar.maxValue = 1000;
-        // playerHPBar.value = playerHP % 1000;
-        // playerHPText.text = $"{playerHP} / {playerMaxHP}";
-        // UpdateHPBarColor(playerHPBar, playerHPBarBackGround, playerMaxHP);
-        // // 前回HPを初期化
-        // m_OldPlayerHP = playerHP;
-
-        // enemyHPBar.maxValue = 1000;
-        // enemyHPBar.value = enemyHP % 1000;
-        // enemyHPText.text = $"{enemyHP} / {enemyMaxHP}";
-        // UpdateHPBarColor(enemyHPBar, enemyHPBarBackGround, enemyMaxHP);
-        // m_OldEnemyHP  = enemyHP;
-
         m_OldPlayerHP = 0;
         m_OldEnemyHP = 0;
         UpdateHP(playerHP, playerMaxHP, enemyHP, enemyMaxHP);
@@ -81,9 +62,8 @@ public class BattleUIManager : MonoBehaviour
             courageBar.value = 0;
         }
 
-        selectPanel.gameObject.SetActive(true);
+        selectPanelParent.gameObject.SetActive(false);
         GenerateSkillButtons(playerCards);
-        GeneratePlayerNames(playerCards);
     }
 
     // ================================
@@ -216,31 +196,6 @@ public class BattleUIManager : MonoBehaviour
         return ret;
     }
 
-    private IEnumerator SmoothHPChange(Slider bar, GameObject background, int hp, int m_OldHp)
-    {
-        if (bar == null) yield break;
-
-        int hpBarDiff = (m_OldHp - 1) % 1000 - (hp - 1) % 1000;
-        float startValue = bar.value;
-        float targetValue = hp % 1000;
-        if (targetValue == 0 && hp > 0) targetValue = 1000;
-
-        float duration = 0.8f; // アニメーション速度（秒）
-        float elapsed = 0f;
-
-        while (elapsed < duration)
-        {
-            elapsed += Time.deltaTime;
-            bar.value = Mathf.Lerp(startValue, targetValue, elapsed / duration);
-            yield return null;
-        }
-
-        bar.value = targetValue;
-
-        // 色・背景更新
-        UpdateHPBarColor(bar, background, hp);
-    }
-
     private void UpdateHPBarColor(Slider bar, GameObject background, int hp)
     {
         if (bar == null) return;
@@ -352,32 +307,37 @@ public class BattleUIManager : MonoBehaviour
     // ================================
     private void GenerateSkillButtons(MonsterCard[] playerCards)
     {
-        foreach (Transform child in skillPanel) Destroy(child.gameObject);
+        foreach (Transform child in selectPanelParent) Destroy(child.gameObject);
         buttonsByUser.Clear();
 
-        for (int userIndex = 0; userIndex < playerCards.Length; userIndex++)
+        for (int i = 0; i < playerCards.Length; i++)
         {
-            buttonsByUser[userIndex] = new List<Button>();
+            MonsterCard card = playerCards[i];
+            GameObject unit = Instantiate(selectPanelPrefab, selectPanelParent);
 
-            for (int skillIndex = 0; skillIndex < playerCards[userIndex].skills.Length; skillIndex++)
-            {
-                var skill = playerCards[userIndex].skills[skillIndex];
-                GameObject prefab = (skillIndex % 2 == 0) ? skillButtonPrefabRed : skillButtonPrefabBlue;
-                GameObject buttonObj = Instantiate(prefab, skillPanel);
-                buttonObj.GetComponentInChildren<TextMeshProUGUI>().text = skill.skillName;
+            // モンスター画像設定
+            var image = unit.transform.Find("MonsterImageObj/MonsterImage").GetComponent<Image>();
+            image.sprite = card.monsterSprite;
 
-                Button btn = buttonObj.GetComponentInChildren<Button>();
-                buttonsByUser[userIndex].Add(btn);
+            // ボタン取得
+            Button btn1 = unit.transform.Find("SkillPanel/SkillButtonRedObj/SkillButtonRed").GetComponent<Button>();
+            Button btn2 = unit.transform.Find("SkillPanel/SkillButtonBlueObj/SkillButtonBlue").GetComponent<Button>();
+            var txt1 = btn1.GetComponentInChildren<TextMeshProUGUI>();
+            var txt2 = btn2.GetComponentInChildren<TextMeshProUGUI>();
 
-                int u = userIndex;
-                int s = skillIndex;
-                btn.onClick.AddListener(() =>
-                {
-                    SelectSkillButton(u, s, btn);
-                });
-            }
+            txt1.text = card.skills[0].skillName;
+            txt2.text = card.skills[1].skillName;
+
+            // 登録
+            buttonsByUser[i] = new List<Button> { btn1, btn2 };
+
+            // クリックイベント
+            int u = i;
+            btn1.onClick.AddListener(() => SelectSkillButton(u, 0, btn1));
+            btn2.onClick.AddListener(() => SelectSkillButton(u, 1, btn2));
         }
     }
+
 
     private void SelectSkillButton(int userIndex, int skillIndex, Button pressed)
     {
@@ -426,41 +386,9 @@ public class BattleUIManager : MonoBehaviour
 
     public void SetButtonsActive(bool active)
     {
-        selectPanel.gameObject.SetActive(active);
+        selectPanelParent.gameObject.SetActive(active);
         // skillPanel.gameObject.SetActive(active);
         // namePanel.gameObject.SetActive(active);
-    }
-
-    // ================================
-    // プレイヤー名ラベル
-    // ================================
-    private void GeneratePlayerNames(MonsterCard[] playerCards)
-    {
-        foreach (Transform child in namePanel) Destroy(child.gameObject);
-        playerNameLabels.Clear();
-
-        for (int i = 0; i < playerCards.Length; i++)
-        {
-            GameObject go = Instantiate(playerNamePrefab, namePanel);
-            var label = go.GetComponentInChildren<TextMeshProUGUI>();
-            label.text = playerCards[i].cardName;
-            playerNameLabels.Add(label);
-        }
-    }
-
-    public void FlashName(int index, float duration = 0.4f)
-    {
-        if (index < 0 || index >= playerNameLabels.Count) return;
-        var label = playerNameLabels[index];
-        StartCoroutine(FlashRoutine(label, duration));
-    }
-
-    private System.Collections.IEnumerator FlashRoutine(TextMeshProUGUI label, float duration)
-    {
-        var old = label.color;
-        label.color = Color.yellow;
-        yield return new WaitForSeconds(duration);
-        label.color = old;
     }
 
     // ================================

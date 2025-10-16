@@ -93,6 +93,23 @@ public class BattleSpawner : MonoBehaviour
         if (enemyArea != null) enemyArea.localPosition = new Vector3(0, 0, posZ);
     }
 
+    public void SetResultObject()
+    {
+        foreach (var obj in EnemyObjects) if (obj) Destroy(obj);
+        // プレイヤーたちをY軸180°回転
+        if (PlayerObjects != null)
+        {
+            foreach (var obj in PlayerObjects)
+            {
+                if (obj == null) continue;
+
+                Vector3 rot = obj.transform.eulerAngles;
+                rot.y += 180f;
+                obj.transform.eulerAngles = rot;
+            }
+        }
+    }
+
     // ================================
     // クリア
     // ================================

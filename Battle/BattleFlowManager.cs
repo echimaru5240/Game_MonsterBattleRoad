@@ -25,15 +25,15 @@ public class BattleFlowManager : MonoBehaviour
 
         StartCoroutine(battleManager.SetupBattle(playerTeam, stage, OnBattleEnd, initialCourage));
 
-        if (stage.bgm != null)
-        {
-            AudioSource audio = GetComponent<AudioSource>();
-            if (audio != null)
-            {
-                audio.clip = stage.bgm;
-                audio.Play();
-            }
-        }
+        // if (stage.bgm != null)
+        // {
+        //     AudioSource audio = GetComponent<AudioSource>();
+        //     if (audio != null)
+        //     {
+        //         audio.clip = stage.bgm;
+        //         audio.Play();
+        //     }
+        // }
     }
 
     private void OnBattleEnd(bool playerWon, int remainingCourage)

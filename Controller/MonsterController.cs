@@ -184,6 +184,18 @@ public class MonsterController : MonoBehaviour
         }
     }
 
+
+    /// <summary>
+    /// 戦闘不能
+    /// </summary>
+    public void PlayResultWin(bool isResult)
+    {
+        if (animator != null)
+        {
+            animator.SetBool("IsResult", isResult);
+        }
+    }
+
     /// <summary>
     /// 攻撃が当たる瞬間（アニメーションイベントで呼ばれる）
     /// </summary>
