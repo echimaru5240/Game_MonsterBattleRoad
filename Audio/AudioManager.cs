@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Collections;
+using System.Collections.Generic;
 
 /// <summary>
 /// バトルロード共通サウンド管理
@@ -13,6 +14,10 @@ public class AudioManager : MonoBehaviour
     [SerializeField] private AudioSource bgmSource;
     [SerializeField] private AudioSource seSource;
 
+    [Header("Settings")]
+    [Range(0f, 1f)] public float bgmVolume = 0.3f;
+    [Range(0f, 1f)] public float seVolume = 1.0f;
+
     [Header("BGM Clips")]
     public AudioClip homeBGM;
     public AudioClip battleBGM;
@@ -22,14 +27,17 @@ public class AudioManager : MonoBehaviour
 
     [Header("SE Clips")]
     public AudioClip buttonSE;
+    public AudioClip actionSE;
+    public AudioClip walkSE;
     public AudioClip attackSE;
     public AudioClip hitSE;
     public AudioClip finisherSE;
     public AudioClip courageMaxSE;
 
-    [Header("Settings")]
-    [Range(0f, 1f)] public float bgmVolume = 0.8f;
-    [Range(0f, 1f)] public float seVolume = 1.0f;
+    [Header("個別SE登録")]
+    [SerializeField] private List<ActionSEData> seDataList = new List<ActionSEData>();
+    private Dictionary<ActionSE, AudioClip> seDictionary = new();
+
     public float fadeDuration = 1.0f;
 
     private Coroutine fadeRoutine;
@@ -56,6 +64,14 @@ public class AudioManager : MonoBehaviour
         {
             seSource = gameObject.AddComponent<AudioSource>();
             seSource.loop = false;
+        }
+
+        // 辞書へ変換
+        foreach (var data in seDataList)
+        {
+            Debug.Log($"オーディオデータ:{data.actionSE}");
+            if (!seDictionary.ContainsKey(data.actionSE) && data.clip != null)
+                seDictionary.Add(data.actionSE, data.clip);
         }
     }
 
@@ -124,10 +140,25 @@ public class AudioManager : MonoBehaviour
         seSource.PlayOneShot(clip, seVolume);
     }
 
+
+    public void PlayActionSE(ActionSE type)
+    {
+        if (seDictionary.TryGetValue(type, out AudioClip clip))
+        {
+            seSource.PlayOneShot(clip);
+        }
+        else
+        {
+            Debug.LogWarning($"未登録のSE: {type}");
+        }
+    }
+
     // ================================
     // ? 汎用呼び出しヘルパー
     // ================================
     public void PlayButtonSE() => PlaySE(buttonSE);
+    public void PlayActionSE() => PlaySE(actionSE);
+    public void PlayWalkSE() => PlaySE(walkSE);
     public void PlayAttackSE() => PlaySE(attackSE);
     public void PlayHitSE() => PlaySE(hitSE);
     public void PlayFinisherSE() => PlaySE(finisherSE);
