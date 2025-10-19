@@ -15,12 +15,20 @@ public class BattleUIManager : MonoBehaviour
     public TextMeshProUGUI playerHPText;
     public TextMeshProUGUI enemyHPText;
 
+    [Header("HPバー段階色設定")]
+    [SerializeField] private Color[] fillColors = new Color[5];       // HPバーの色
+    [SerializeField] private Color transparent = new Color(1, 1, 1, 0); // デフォルト透明
+
     [Header("テキスト管理")]
     public BattleTextManager textManager;
 
     [Header("Skill Buttons")]
     public Transform selectPanelParent;
     public GameObject selectPanelPrefab;
+
+    [Header("アクション時の敵味方強調背景")]
+    public Transform playerActionBackParent;
+    public Transform enemyActionBackParent;
 
     [Header("Damage Popup")]
     public GameObject damageTextPrefab;
@@ -36,11 +44,13 @@ public class BattleUIManager : MonoBehaviour
     private Dictionary<int, List<Button>> buttonsByUser = new Dictionary<int, List<Button>>();
     private List<TextMeshProUGUI> playerNameLabels = new List<TextMeshProUGUI>();
 
-    private readonly Color selectedBtnColor = new Color(1f, 111f / 255f, 0f, 1f);
-    private readonly Color disabledBtnColor = new Color(0.8f, 0.8f, 0.8f, 1f);
+    // private readonly Color selectedBtnColor = new Color(1f, 111f / 255f, 0f, 1f);
+    [SerializeField] private Color disabledBtnColor = new Color();
 
-    private Coroutine playerHpRoutine;
-    private Coroutine enemyHpRoutine;
+    private Coroutine playerHpTextRoutine;
+    private Coroutine enemyHpTextRoutine;
+    private Coroutine playerHpBarRoutine;
+    private Coroutine enemyHpBarRoutine;
     private int m_OldPlayerHP;
     private int m_OldEnemyHP;
 
@@ -53,7 +63,10 @@ public class BattleUIManager : MonoBehaviour
         // HPバー初期化
         m_OldPlayerHP = 0;
         m_OldEnemyHP = 0;
-        UpdateHP(playerHP, playerMaxHP, enemyHP, enemyMaxHP);
+        UpdateHP(playerHP, enemyHP);
+
+        playerActionBackParent.gameObject.SetActive(false);
+        enemyActionBackParent.gameObject.SetActive(false);
 
         // 勇気ゲージ初期化
         if (courageBar != null)
@@ -69,21 +82,47 @@ public class BattleUIManager : MonoBehaviour
     // ================================
     // HP更新
     // ================================
-    public void UpdateHP(int playerHP, int playerMax, int enemyHP, int enemyMax)
+    public void UpdateHP(int playerHP, int enemyHP)
     {
-        playerHPText.text = $"{playerHP} / {playerMax}";
-        enemyHPText.text = $"{enemyHP} / {enemyMax}";
+        // HP(数字)を徐々に変化
+        if (playerHpTextRoutine != null) StopCoroutine(playerHpTextRoutine);
+        if (enemyHpTextRoutine != null) StopCoroutine(enemyHpTextRoutine);
 
+        playerHpTextRoutine = StartCoroutine(SmoothHPTextChange(playerHPText, m_OldPlayerHP, playerHP));
+        enemyHpTextRoutine = StartCoroutine(SmoothHPTextChange(enemyHPText, m_OldEnemyHP, enemyHP));
 
-        // HPバーを徐々に変化
-        if (playerHpRoutine != null) StopCoroutine(playerHpRoutine);
-        if (enemyHpRoutine != null) StopCoroutine(enemyHpRoutine);
+        // HP(バー)を徐々に変化
+        if (playerHpBarRoutine != null) StopCoroutine(playerHpBarRoutine);
+        if (enemyHpBarRoutine != null) StopCoroutine(enemyHpBarRoutine);
 
-        playerHpRoutine = StartCoroutine(SmoothHPChangeSegmented(playerHPBar, playerHPBarBackGround, playerHP, m_OldPlayerHP));
-        enemyHpRoutine = StartCoroutine(SmoothHPChangeSegmented(enemyHPBar, enemyHPBarBackGround, enemyHP, m_OldEnemyHP));
+        playerHpBarRoutine = StartCoroutine(SmoothHPChangeSegmented(playerHPBar, playerHPBarBackGround, playerHP, m_OldPlayerHP));
+        enemyHpBarRoutine = StartCoroutine(SmoothHPChangeSegmented(enemyHPBar, enemyHPBarBackGround, enemyHP, m_OldEnemyHP));
 
         m_OldPlayerHP = playerHP;
         m_OldEnemyHP = enemyHP;
+    }
+
+    /// <summary>
+    /// HP(数値)を滑らかに変化させる
+    /// </summary>
+    private IEnumerator SmoothHPTextChange(TMPro.TextMeshProUGUI text, int fromHP, int toHP)
+    {
+        if (text == null) yield break;
+
+        float duration = 0.5f; // 数値変化の速度（調整可能）
+        float elapsed = 0f;
+
+        while (elapsed < duration)
+        {
+            elapsed += Time.deltaTime;
+            float t = Mathf.Clamp01(elapsed / duration);
+            int current = Mathf.RoundToInt(Mathf.Lerp(fromHP, toHP, t));
+            text.text = $"{current}";
+            yield return null;
+        }
+
+        // 最終値を固定
+        text.text = $"{toHP}";
     }
 
     private IEnumerator SmoothHPChangeSegmented(Slider bar, GameObject background, int toHP, int fromHP)
@@ -122,8 +161,6 @@ public class BattleUIManager : MonoBehaviour
             // 現段階内でのバー値を計算
             float startVal = HPInStageValue(segFrom, false, segTo < segFrom);
             float endVal   = HPInStageValue(segTo, true, segTo < segFrom);
-
-            Debug.Log($"Segment: {segFrom}→{segTo}, startVal={startVal}, endVal={endVal}, duration={segDuration}");
 
             // 区間アニメーション
             float t = 0f;
@@ -200,52 +237,24 @@ public class BattleUIManager : MonoBehaviour
     {
         if (bar == null) return;
 
-        // HPごとの段階を計算（1?1000:第1段階、1001?2000:第2段階、...）
-        int stage = Mathf.Clamp((hp - 1) / 1000, 0, 4); // 0?4段階に制限（最大5000HP想定）
+        // HPごとの段階を計算（例: 1?1000 = 0, 1001?2000 = 1 ...）
+        int stage = Mathf.Clamp((hp - 1) / 1000, 0, fillColors.Length - 1);
 
         // Fill Area のイメージを取得
         var fill = bar.fillRect.GetComponentInChildren<Image>();
         if (fill == null) return;
 
-        // デフォルト透明背景
+        // デフォルト背景（透明）
         if (background != null)
-            background.GetComponent<Image>().color = new Color(1, 1, 1, 0); // 完全透明
+            background.GetComponent<Image>().color = transparent;
 
-        // HP段階に応じて色を切り替え
-        switch (stage)
-        {
-            case 0: // 1?1000
-                fill.color = Color.red;
-                if (background != null)
-                    background.GetComponent<Image>().color = new Color(1, 1, 1, 0); // 背景透明
-                break;
+        // Inspectorで設定された色を反映
+        if (fillColors.Length > stage + 1)
+            fill.color = fillColors[stage+1];
 
-            case 1: // 1001?2000
-                fill.color = Color.yellow;
-                if (background != null)
-                    background.GetComponent<Image>().color = Color.red;
-                break;
-
-            case 2: // 2001?3000
-                fill.color = Color.green;
-                if (background != null)
-                    background.GetComponent<Image>().color = Color.yellow;
-                break;
-
-            case 3: // 3001?4000
-                fill.color = Color.cyan;
-                if (background != null)
-                    background.GetComponent<Image>().color = Color.green;
-                break;
-
-            default: // 4001以上
-                fill.color = Color.magenta;
-                if (background != null)
-                    background.GetComponent<Image>().color = Color.cyan;
-                break;
-        }
-}
-
+        if (fillColors.Length > stage && background != null)
+            background.GetComponent<Image>().color = fillColors[stage];
+    }
 
     // ================================
     // 勇気ゲージ更新
@@ -257,6 +266,19 @@ public class BattleUIManager : MonoBehaviour
         courageBar.value = current;
     }
 
+    public void ShowActionBack(bool isPlayerSide)
+    {
+        GameObject targetObj = isPlayerSide ? playerActionBackParent.gameObject : enemyActionBackParent.gameObject;
+        targetObj.SetActive(true);
+        StartCoroutine(ShowActionBackRoutine(targetObj, 1f));
+    }
+
+    private IEnumerator ShowActionBackRoutine(GameObject targetObj, float duration)
+    {
+        yield return new WaitForSeconds(duration);
+        targetObj.SetActive(false);
+    }
+
     // ================================
     // テキスト関連ラッパー
     // ================================
@@ -264,11 +286,6 @@ public class BattleUIManager : MonoBehaviour
     public void ShowTurnText(int turn)
     {
         textManager.ShowTurnText(turn);
-    }
-
-    public void HideTurnText()
-    {
-        textManager.HideTurnText();
     }
 
     public void ShowAttackText(bool isPlayerSide, string monsterName, string skillName)
@@ -294,12 +311,6 @@ public class BattleUIManager : MonoBehaviour
     public void ShowMainText(string message)
     {
         textManager.ShowMainText(message);
-    }
-
-    public void ShowBattleResultText(bool playerWon)
-    {
-        string msg = playerWon ? "勝利！" : "敗北…";
-        textManager.ShowMainText(msg, 2.5f);
     }
 
     // ================================
@@ -341,18 +352,61 @@ public class BattleUIManager : MonoBehaviour
 
     private void SelectSkillButton(int userIndex, int skillIndex, Button pressed)
     {
-        SetButtonImmediateColor(pressed, selectedBtnColor);
+        AudioManager.Instance.PlayButtonSE();
+        SetSkillButtonFrameActive(pressed, true);
+        // SetButtonImmediateColor(pressed, selectedBtnColor);
         pressed.interactable = false;
 
         foreach (var b in buttonsByUser[userIndex])
         {
             if (b == pressed) continue;
-            SetButtonImmediateColor(b, disabledBtnColor);
+            // SetButtonImmediateColor(b, disabledBtnColor);
             b.interactable = false;
+            b.gameObject.SetActive(false);
         }
 
         OnSkillSelected?.Invoke(userIndex, skillIndex);
     }
+
+    /// <summary>
+    /// 特定のスキルボタンのフレーム表示を切り替える
+    /// </summary>
+    public void SetSkillButtonFrameActive(Button button, bool active)
+    {
+        if (button == null) return;
+
+        // Frame オブジェクトを探す（階層内）
+        Transform frame = button.transform.parent.Find("Frame");
+        if (frame != null)
+        {
+            frame.gameObject.SetActive(active);
+        }
+        else
+        {
+            Debug.LogWarning($"Frame オブジェクトが {button.name} 内に見つかりませんでした。");
+        }
+    }
+
+    /// <summary>
+    /// 外部から特定のスキルボタンのフレーム表示を切り替える
+    /// </summary>
+    public void SetSkillButtonFrameActive(int userIndex, int skillIndex, bool active)
+    {
+        Button button = buttonsByUser[userIndex][skillIndex];
+        if (button == null) return;
+
+        // Frame オブジェクトを探す（階層内）
+        Transform frame = button.transform.parent.Find("Frame");
+        if (frame != null)
+        {
+            frame.gameObject.SetActive(active);
+        }
+        else
+        {
+            Debug.LogWarning($"Frame オブジェクトが {button.name} 内に見つかりませんでした。");
+        }
+    }
+
 
     // ================================
     // ボタンの有効化・無効化
@@ -367,7 +421,8 @@ public class BattleUIManager : MonoBehaviour
                 var graphic = btn.targetGraphic as Graphic;
                 if (graphic) graphic.color = Color.white;
                 btn.interactable = true;
-                // btn.gameObject.SetActive(true); // 再表示
+                SetSkillButtonFrameActive(btn, false);
+                btn.gameObject.SetActive(true); // 再表示
             }
         }
     }

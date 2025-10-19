@@ -32,9 +32,9 @@ public class BattleTextManager : MonoBehaviour
         enemySkillText.text = "";
         // 初期は非表示にしておく
         mainTextObj.SetActive(false);
-        turnTextObj.SetActive(false);
         playerTextObj.SetActive(false);
         enemyTextObj.SetActive(false);
+        turnTextObj.SetActive(true);
     }
 
     // ================================
@@ -59,14 +59,9 @@ public class BattleTextManager : MonoBehaviour
     // ================================
     public void ShowTurnText(int turn)
     {
-        turnTextObj.SetActive(true);
-        battleTurnText.text = $"ターン {turn}";
+        battleTurnText.text = $"{turn}";
     }
 
-    public void HideTurnText()
-    {
-        turnTextObj.SetActive(false);
-    }
 
     // ================================
     // プレイヤー攻撃テキスト

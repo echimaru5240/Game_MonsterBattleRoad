@@ -44,7 +44,7 @@ public class MonsterController : MonoBehaviour
         // ① 正面ショット
         cameraManager?.SwitchToFrontCamera(transform, isEnemy);
 
-        yield return new WaitForSeconds(1.0f); // 少し見せる
+        yield return new WaitForSeconds(1.5f); // 少し見せる
 
         // ② 攻撃対象へ移動
         // 単体攻撃時は対象に移動
@@ -61,16 +61,25 @@ public class MonsterController : MonoBehaviour
             Quaternion lookRot = Quaternion.LookRotation(dir);
             transform.rotation = lookRot;
             cameraManager.SwitchToActionCamera(target.transform, isEnemy, transform);
+            if (animator != null)
+            {
+                animator.SetBool("IsMove", true);
+            }
 
             while (t < 1f)
             {
-                t += Time.deltaTime * 1.5f; // 移動速度
+                t += Time.deltaTime * 0.5f; // 移動速度
                 transform.position = Vector3.Lerp(start, end, t);
 
                 // 追従カメラ
                 // cameraManager?.SwitchToActionCamera(transform, isEnemy);
 
                 yield return null;
+            }
+
+            if (animator != null)
+            {
+                animator.SetBool("IsMove", false);
             }
         }
 
@@ -197,6 +206,15 @@ public class MonsterController : MonoBehaviour
     }
 
     /// <summary>
+    /// 攻撃をする瞬間（アニメーションイベントで呼ばれる）
+    /// </summary>
+    public void OnAttack()
+    {
+        AudioManager.Instance.PlayActionSE(cardData.attackSE);
+        Debug.Log("OnAttack");
+    }
+
+    /// <summary>
     /// 攻撃が当たる瞬間（アニメーションイベントで呼ばれる）
     /// </summary>
     public void OnAttackHit()
@@ -217,5 +235,16 @@ public class MonsterController : MonoBehaviour
     {
         attackEnded = true; // ← フラグONでPerformAttackが再開
         Debug.Log("OnAttackEnd");
+    }
+
+
+    /// <summary>
+    /// 移動のポイント
+    /// （アニメーションイベントから呼ばれる想定）
+    /// </summary>
+    public void OnWalkPoint()
+    {
+        AudioManager.Instance.PlayActionSE(cardData.moveSE);
+        Debug.Log("OnWalkPoint");
     }
 }
