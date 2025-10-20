@@ -156,6 +156,7 @@ public class AudioManager : MonoBehaviour
     // ================================
     // ? 汎用呼び出しヘルパー
     // ================================
+    public void PlayHomeBGM() => PlayBGM(homeBGM);
     public void PlayButtonSE() => PlaySE(buttonSE);
     public void PlayActionSE() => PlaySE(actionSE);
     public void PlayWalkSE() => PlaySE(walkSE);

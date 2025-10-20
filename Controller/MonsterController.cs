@@ -5,16 +5,19 @@ using System.Collections.Generic;
 public class MonsterController : MonoBehaviour
 {
     private Animator animator;
-    private CameraManager cameraManager;
 
+    public bool isPlayer;
     public MonsterCard cardData;
-    public bool isEnemy;
+
+    // モンスターごとの行動スクリプト（動的に追加される）
+    private MonsterActionBase actionBehavior;
 
     private Skill currentSkill;
     private List<MonsterController> currentTargets = new();
 
     // ? 元の位置を保存しておく
     private Vector3 initialPosition;
+    private Quaternion initialRotation;
 
     // 攻撃完了を待つフラグ
     private bool attackEnded = false;
@@ -22,108 +25,45 @@ public class MonsterController : MonoBehaviour
     /// <summary>
     /// 初期化
     /// </summary>
-    public void Init(CameraManager camMgr, bool isEnemy, MonsterCard card)
+    public void Init(bool isPlayer, MonsterCard card)
     {
+        this.isPlayer = isPlayer;
+        this.cardData = card;
         animator = GetComponent<Animator>();
-        cameraManager = camMgr;
-        this.isEnemy = isEnemy;
-        cardData = card;
+
+        // 各モンスターの攻撃スクリプトを取得
+        actionBehavior = GetComponent<MonsterActionBase>();
+        if (actionBehavior == null)
+        {
+            Debug.LogWarning($"{name} に MonsterActionBase 派生スクリプトがありません。通常攻撃を使用します。");
+            actionBehavior = gameObject.AddComponent<MonsterAction_Common>();
+        }
 
         // 生成時の位置を記録
         initialPosition = transform.position;
+        initialRotation = transform.rotation;
     }
 
     public IEnumerator PerformAttack(List<MonsterController> targets, Skill skill)
     {
+        if (actionBehavior == null || targets == null || targets.Count == 0)
+            yield break;
+
+        attackEnded = false;
+
         currentSkill = skill;
         currentTargets = targets;
-        attackEnded = false; // 攻撃開始時にリセット
 
-        Quaternion startRot = transform.rotation;
+        yield return StartCoroutine(actionBehavior.Execute(this, targets[0], skill));
 
-        // ① 正面ショット
-        cameraManager?.SwitchToFrontCamera(transform, isEnemy);
-
-        yield return new WaitForSeconds(1.5f); // 少し見せる
-
-        // ② 攻撃対象へ移動
-        // 単体攻撃時は対象に移動
-        if (targets.Count == 1)
-        {
-            var target = targets[0];
-            Vector3 start = transform.position;
-            Vector3 end = target.transform.position + (isEnemy ? Vector3.forward : Vector3.back) * 1.2f; // 少し手前に
-            float t = 0;
-
-            // ? ターゲット方向を向く
-            Vector3 dir = (end - start).normalized;
-            dir.y = 0;
-            Quaternion lookRot = Quaternion.LookRotation(dir);
-            transform.rotation = lookRot;
-            cameraManager.SwitchToActionCamera(target.transform, isEnemy, transform);
-            if (animator != null)
-            {
-                animator.SetBool("IsMove", true);
-            }
-
-            while (t < 1f)
-            {
-                t += Time.deltaTime * 0.5f; // 移動速度
-                transform.position = Vector3.Lerp(start, end, t);
-
-                // 追従カメラ
-                // cameraManager?.SwitchToActionCamera(transform, isEnemy);
-
-                yield return null;
-            }
-
-            if (animator != null)
-            {
-                animator.SetBool("IsMove", false);
-            }
-        }
-
-        transform.rotation = startRot;
-        // ③ 攻撃モーション
-        PlayAttack();
-        // 攻撃アニメ中の OnAttackHit() で onHitCallback が呼ばれる
-        // ? 攻撃モーションが終わるまで待機
-        while (!attackEnded)
-            yield return null;
-        yield return new WaitForSeconds(1f); // アニメ時間に合わせる
-
-        // ④ 元の位置へ戻す
-        if (targets.Count == 1)
-        {
-            Vector3 start = transform.position;
-            Vector3 end = initialPosition; // 攻撃前の座標に戻す
-            transform.position = initialPosition;
-        }
-
-        // 戻ったら全体カメラへ
-        cameraManager?.SwitchToOverviewCamera();
-
-
-        // ⑤ 次の行動まで少し間を置く（余韻タイム）
-        yield return null;//new WaitForSeconds(1.0f); // アニメ時間に合わせる
+        while (!attackEnded) yield return null;
+        yield return new WaitForSeconds(1.5f);
     }
 
-    /// <summary>
-    /// 攻撃アニメーション＋カメラ演出
-    /// </summary>
-    public void PlayAttack()
+    public void ReturnToInitialPosition()
     {
-        if (animator != null)
-        {
-            animator.SetTrigger("DoAttack");
-
-            // 攻撃時カメラ演出
-            // if (cameraManager != null)
-                // cameraManager.SwitchToActionCamera(transform, isEnemy);
-                // StartCoroutine(cameraManager.MoveCameraAroundAttacker(transform, 3f));
-
-                // cameraManager?.PlayAttackCamera(transform, isEnemy, 1.8f);
-        }
+        transform.position = initialPosition;
+        transform.rotation = initialRotation;
     }
 
 
@@ -140,8 +80,8 @@ public class MonsterController : MonoBehaviour
             if (attacker != null)
                 StartCoroutine(Knockback(attacker));
             // 被弾時の寄りカメラ
-            // if (cameraManager != null)
-            //     cameraManager?.PlayHitReactionCamera(transform, isEnemy, 1.2f);
+            // if (CameraManager.Instance != null)
+            //     CameraManager.Instance?.PlayHitReactionCamera(transform, isPlayer, 1.2f);
         }
     }
 
@@ -177,8 +117,6 @@ public class MonsterController : MonoBehaviour
         // 最後に少しバウンド（オプション）
         yield return new WaitForSeconds(0.1f);
         transform.position = end;
-        yield return new WaitForSeconds(1f);
-        transform.position = start;
 }
 
 
@@ -195,7 +133,7 @@ public class MonsterController : MonoBehaviour
 
 
     /// <summary>
-    /// 戦闘不能
+    /// 戦闘勝利モーション
     /// </summary>
     public void PlayResultWin(bool isResult)
     {
@@ -211,6 +149,9 @@ public class MonsterController : MonoBehaviour
     public void OnAttack()
     {
         AudioManager.Instance.PlayActionSE(cardData.attackSE);
+        // ? 攻撃エフェクトを呼び出す
+        // Vector3 effectPos = target.transform.position + Vector3.up * 1f;
+        // EffectManager.Instance.PlayEffect(actionBehavior.attackEffectType, effectPos);
         Debug.Log("OnAttack");
     }
 

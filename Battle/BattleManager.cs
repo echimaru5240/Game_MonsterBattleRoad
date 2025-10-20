@@ -47,7 +47,6 @@ public class BattleManager : MonoBehaviour
     [SerializeField] private BattleResultUIManager resultUIManager;
     [SerializeField] private GameObject resultUIPanel;
     public BattleSpawner spawner;
-    [SerializeField] private CameraManager cameraManager;
 
     private MonsterCard[] playerCards;
     private MonsterCard[] enemyCards;
@@ -117,7 +116,7 @@ public class BattleManager : MonoBehaviour
         ResetSelections();
 
         // ? ステージ情報からカメラ設定
-        cameraManager.SwitchToOverviewCamera();
+        CameraManager.Instance.SwitchToOverviewCamera();
         battleUIManager.ShowMainText("バトル開始！");
         yield return new WaitForSeconds(2.0f);
 
@@ -290,20 +289,18 @@ public class BattleManager : MonoBehaviour
     // ================================
     // スキル実行
     // ================================
-    private IEnumerator ExecuteSkill(MonsterCard user, Skill skill, bool isPlayerSide)
+    private IEnumerator ExecuteSkill(MonsterCard user, Skill skill, bool isPlayer)
     {
         // 攻撃モーション
-        MonsterController attackerCtrl = isPlayerSide
+        MonsterController attackerCtrl = isPlayer
             ? spawner.PlayerMap[user]
             : spawner.EnemyMap[user];
 
-        // MonsterController targetCtrl = isPlayerSide
-        //     ? spawner.EnemyControllers[Random.Range(0, spawner.EnemyControllers.Count)]
-        //     : spawner.PlayerControllers[Random.Range(0, spawner.PlayerControllers.Count)];
-
         AudioManager.Instance.PlayActionSE();
-        battleUIManager.ShowActionBack(isPlayerSide);
-        battleUIManager.ShowAttackText(isPlayerSide, user.cardName, skill.skillName);
+        battleUIManager.ShowActionBack(isPlayer);
+        battleUIManager.ShowAttackText(isPlayer, user.cardName, skill.skillName);
+        CameraManager.Instance.SwitchToFrontCamera(attackerCtrl.transform, isPlayer);
+        yield return new WaitForSeconds(1.5f);
 
         List<MonsterController> targets = new();
 
@@ -311,10 +308,10 @@ public class BattleManager : MonoBehaviour
         {
             case SkillType.Attack:
                 if (skill.targetType == SkillTargetType.All)
-                    targets.AddRange(isPlayerSide ? spawner.EnemyControllers : spawner.PlayerControllers);
+                    targets.AddRange(isPlayer ? spawner.EnemyControllers : spawner.PlayerControllers);
                 else
                 {
-                    var target = isPlayerSide
+                    var target = isPlayer
                         ? spawner.EnemyControllers[Random.Range(0, spawner.EnemyControllers.Count)]
                         : spawner.PlayerControllers[Random.Range(0, spawner.PlayerControllers.Count)];
                     targets.Add(target);
@@ -322,13 +319,12 @@ public class BattleManager : MonoBehaviour
 
                 // 攻撃コルーチン実行
                 yield return StartCoroutine(attackerCtrl.PerformAttack(targets, skill));
-                // yield return new WaitForSeconds(0.4f);
-                if (isPlayerSide) AddCourage(20);
+                if (isPlayer) AddCourage(20);
                 break;
 
             case SkillType.Heal:
                 // int heal = BattleCalculator.CalculateHeal(user, skill);
-                // if (isPlayerSide)
+                // if (isPlayer)
                 // {
                 //     playerCurrentHP = Mathf.Min(playerMaxHP, playerCurrentHP + heal);
                 //     ShowDamagePopup(heal, spawner.PlayerObjects[0], true);
@@ -347,8 +343,15 @@ public class BattleManager : MonoBehaviour
                 break;
         }
 
-        battleUIManager.HideAttackText(isPlayerSide);
+        battleUIManager.HideAttackText(isPlayer);
         UpdateHPBars();
+
+        // 戻ったら全体カメラへ
+        CameraManager.Instance.SwitchToOverviewCamera();
+        attackerCtrl.ReturnToInitialPosition();
+        foreach (var target in targets)
+            target.ReturnToInitialPosition();
+
     }
 
     // ================================
@@ -391,7 +394,7 @@ public class BattleManager : MonoBehaviour
         AudioManager.Instance.PlayBGM(playerWon ? AudioManager.Instance.victoryBGM : AudioManager.Instance.defeatBGM);
 
         spawner.SetResultObject();
-        cameraManager.SwitchToResultCamera();
+        CameraManager.Instance.SwitchToResultCamera();
         List<MonsterController> playerControllers = new();
         playerControllers.AddRange(spawner.PlayerControllers);
         foreach (var playerController in playerControllers )

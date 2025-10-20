@@ -14,10 +14,12 @@ public static class BattleCalculator
     public static void OnAttackHit(MonsterController attacker, Skill skill, List<MonsterController> targets)
     {
         var mgr = BattleManager.Instance;
-        bool isPlayerSide = !attacker.isEnemy;
+        bool isPlayerSide = attacker.isPlayer;
         bool isMultiTarget = targets.Count > 1;
 
         int totalDamage = 0;
+
+        Debug.Log($"isPlayerSide={isPlayerSide}");
 
         // ① ダメージ計算とポップアップ表示
         foreach (var target in targets)
