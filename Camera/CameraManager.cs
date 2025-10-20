@@ -7,12 +7,17 @@ using System.Collections;
 /// </summary>
 public class CameraManager : MonoBehaviour
 {
+    public static CameraManager Instance { get; private set; }
+
     [Header("Cameras")]
     [Tooltip("全体を俯瞰で映すカメラ")]
     public CinemachineCamera overviewCamera;
 
     [Tooltip("攻撃キャラを映すアクションカメラ")]
     public CinemachineCamera actionCamera;
+
+    [Tooltip("リザルト画面を映すカメラ")]
+    public CinemachineCamera resultCamera;
 
     private CinemachineBrain brain;
 
@@ -50,8 +55,16 @@ public class CameraManager : MonoBehaviour
     // ==============================
     // 初期化
     // ==============================
-    private void Start()
+    private void Awake()
     {
+        if (Instance != null && Instance != this)
+        {
+            Destroy(gameObject);
+            return;
+        }
+        Instance = this;
+        DontDestroyOnLoad(gameObject); // シーンをまたいでも保持
+
         brain = Camera.main.GetComponent<CinemachineBrain>();
         if (brain == null)
         {
@@ -91,19 +104,19 @@ public class CameraManager : MonoBehaviour
     public void StartOverviewRotation() => rotateOverview = true;
     public void StopOverviewRotation() => rotateOverview = false;
 
-    public void SwitchToFrontCamera(Transform target, bool isEnemy)
+    public void SwitchToFrontCamera(Transform target, bool isPlayer)
     {
         float distance = 10f;
 
-        if (isEnemy)
+        if (isPlayer)
         {
-            SetupCameraFollow(actionCamera, target, isEnemy, Vector3.zero, distance);
-            actionCamera.transform.rotation = Quaternion.Euler(30f, -20f, 0);
+            SetupCameraFollow(actionCamera, target, isPlayer, Vector3.zero, distance);
+            actionCamera.transform.rotation = Quaternion.Euler(30f, 200f, 0);
         }
         else
         {
-            SetupCameraFollow(actionCamera, target, isEnemy, Vector3.zero, distance);
-            actionCamera.transform.rotation = Quaternion.Euler(30f, 200f, 0);
+            SetupCameraFollow(actionCamera, target, isPlayer, Vector3.zero, distance);
+            actionCamera.transform.rotation = Quaternion.Euler(30f, -20f, 0);
         }
 
         SetCameraInstant(actionCamera);
@@ -117,18 +130,18 @@ public class CameraManager : MonoBehaviour
         StopOverviewRotation();
 
         // カメラ位置・向き設定（後方からやや上）
-        actionCamera.transform.position = new Vector3(0f, 5f, -20f);
-        actionCamera.transform.rotation = Quaternion.Euler(10f, 0f, 0f);
+        // actionCamera.transform.position = new Vector3(0f, 5f, -20f);
+        // actionCamera.transform.rotation = Quaternion.Euler(10f, 0f, 0f);
 
         // カメラを即時切り替え
-        SetCameraInstant(actionCamera);
+        SetCameraInstant(resultCamera);
     }
 
 
     /// <summary>
     /// 攻撃開始時などにアクションカメラへ即切り替え
     /// </summary>
-    public void SwitchToActionCamera2(Transform target, bool isEnemy)
+    public void SwitchToActionCamera2(Transform target, bool isPlayer)
     {
         if (target == null || actionCamera == null) return;
 
@@ -145,7 +158,7 @@ public class CameraManager : MonoBehaviour
     /// 攻撃開始時などにアクションカメラへ即切り替え
     /// ターゲットを向き続けながら、Z座標のみ移動する
     /// </summary>
-    public void SwitchToActionCamera(Transform target, bool isEnemy, Transform attacker)
+    public void SwitchToActionCamera(Transform target, bool isPlayer, Transform attacker)
     {
         if (target == null || actionCamera == null || attacker == null) return;
 
@@ -205,7 +218,7 @@ public class CameraManager : MonoBehaviour
     // ==============================
     // 内部Cinemachine設定
     // ==============================
-    private void SetupCameraFollow(CinemachineCamera cam, Transform target, bool isEnemy, Vector3 offset, float distance)
+    private void SetupCameraFollow(CinemachineCamera cam, Transform target, bool isPlayer, Vector3 offset, float distance)
     {
         cam.Follow = target;
         cam.LookAt = target;

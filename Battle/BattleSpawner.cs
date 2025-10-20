@@ -9,9 +9,6 @@ public class BattleSpawner : MonoBehaviour
     public float posZ;
     public float bossPosZ;
 
-    [Header("Camera Manager")]
-    [SerializeField] private CameraManager cameraManager; // Å© í«â¡ÅFCameraManageréQè∆
-
     public List<GameObject> PlayerObjects { get; private set; } = new();
     public List<GameObject> EnemyObjects { get; private set; } = new();
 
@@ -32,15 +29,15 @@ public class BattleSpawner : MonoBehaviour
     {
         Clear();
 
-        SpawnSide(playerCards, playerArea, PlayerObjects, PlayerCards, PlayerControllers, PlayerMap, isEnemy: false);
-        SpawnSide(enemyCards, enemyArea, EnemyObjects, EnemyCards, EnemyControllers, EnemyMap, isEnemy: true);
+        SpawnSide(playerCards, playerArea, PlayerObjects, PlayerCards, PlayerControllers, PlayerMap, isPlayer: true);
+        SpawnSide(enemyCards, enemyArea, EnemyObjects, EnemyCards, EnemyControllers, EnemyMap, isPlayer: false);
     }
 
     private void SpawnSide(
         MonsterCard[] cards, Transform parent,
         List<GameObject> objectList, List<MonsterCard> cardList,
         List<MonsterController> controllerList, Dictionary<MonsterCard, MonsterController> map,
-        bool isEnemy)
+        bool isPlayer)
     {
         if (cards == null || cards.Length == 0) return;
 
@@ -70,7 +67,7 @@ public class BattleSpawner : MonoBehaviour
             var ctrl = obj.GetComponent<MonsterController>();
             if (ctrl != null)
             {
-                ctrl.Init(cameraManager, isEnemy, card); // Å© CameraManagerÇìnÇ∑ÇÊÇ§Ç…èCê≥
+                ctrl.Init(isPlayer, card);
                 controllerList.Add(ctrl);
                 map[card] = ctrl;
             }
