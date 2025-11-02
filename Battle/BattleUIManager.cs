@@ -58,7 +58,7 @@ public class BattleUIManager : MonoBehaviour
     // ================================
     // 初期化
     // ================================
-    public void Init(MonsterCard[] playerCards, int playerHP, int playerMaxHP, int enemyHP, int enemyMaxHP, int courageMax = 100)
+    public void Init(List<MonsterController> playerControllers, int playerHP, int enemyHP, int courageMax = 100)
     {
         // HPバー初期化
         m_OldPlayerHP = 0;
@@ -76,7 +76,7 @@ public class BattleUIManager : MonoBehaviour
         }
 
         selectPanelParent.gameObject.SetActive(false);
-        GenerateSkillButtons(playerCards);
+        GenerateSkillButtons(playerControllers);
     }
 
     // ================================
@@ -316,19 +316,20 @@ public class BattleUIManager : MonoBehaviour
     // ================================
     // スキルボタン生成
     // ================================
-    private void GenerateSkillButtons(MonsterCard[] playerCards)
+    private void GenerateSkillButtons(List<MonsterController> playerControllers)
     {
         foreach (Transform child in selectPanelParent) Destroy(child.gameObject);
         buttonsByUser.Clear();
 
-        for (int i = 0; i < playerCards.Length; i++)
+        for (int i = 0; i < playerControllers.Count; i++)
         {
-            MonsterCard card = playerCards[i];
+            Debug.Log($"playerCount: {playerControllers.Count}");
+            var monster = playerControllers[i];
             GameObject unit = Instantiate(selectPanelPrefab, selectPanelParent);
 
             // モンスター画像設定
             var image = unit.transform.Find("MonsterImageObj/MonsterImage").GetComponent<Image>();
-            image.sprite = card.monsterSprite;
+            image.sprite = monster.sprite;
 
             // ボタン取得
             Button btn1 = unit.transform.Find("SkillPanel/SkillButtonRedObj/SkillButtonRed").GetComponent<Button>();
@@ -336,8 +337,8 @@ public class BattleUIManager : MonoBehaviour
             var txt1 = btn1.GetComponentInChildren<TextMeshProUGUI>();
             var txt2 = btn2.GetComponentInChildren<TextMeshProUGUI>();
 
-            txt1.text = card.skills[0].skillName;
-            txt2.text = card.skills[1].skillName;
+            txt1.text = monster.skills[0].skillName;
+            txt2.text = monster.skills[1].skillName;
 
             // 登録
             buttonsByUser[i] = new List<Button> { btn1, btn2 };
@@ -449,7 +450,7 @@ public class BattleUIManager : MonoBehaviour
     // ================================
     // ダメージポップアップ
     // ================================
-    public void ShowDamagePopup(int value, GameObject target, bool isHeal = false)
+    public void ShowDamagePopup(int value, MonsterController target, bool isHeal = false)
     {
         Vector3 worldPos = target.transform.position + Vector3.up * 2f;
         GameObject popup = Instantiate(damageTextPrefab, canvasTransform);

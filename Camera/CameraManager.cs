@@ -1,6 +1,7 @@
 using UnityEngine;
 using Unity.Cinemachine;
 using System.Collections;
+using DG.Tweening;
 
 /// <summary>
 /// バトル中のカメラ制御（Cinemachine v3対応）
@@ -13,8 +14,16 @@ public class CameraManager : MonoBehaviour
     [Tooltip("全体を俯瞰で映すカメラ")]
     public CinemachineCamera overviewCamera;
 
+    [Tooltip("全体を回転して映すカメラ")]
+    public CinemachineCamera orbitCamera;
+    private CinemachineOrbitalFollow orbitalFollow;
+
     [Tooltip("攻撃キャラを映すアクションカメラ")]
-    public CinemachineCamera actionCamera;
+    public CinemachineCamera playerActionCamera;
+    public CinemachineCamera playerActionCamera_1;
+    public CinemachineCamera enemyActionCamera;
+    public CinemachineCamera enemyActionCamera_1;
+
 
     [Tooltip("リザルト画面を映すカメラ")]
     public CinemachineCamera resultCamera;
@@ -30,6 +39,9 @@ public class CameraManager : MonoBehaviour
 
     [Tooltip("回転速度（度/秒）")]
     public float rotationSpeed = 10f;
+
+    [Tooltip("回転間隔（周/秒）")]
+    public float rotationInterval = 10f;
 
     [Tooltip("回転半径（戦場中心からの距離）")]
     public float rotationRadius = 10f;
@@ -73,7 +85,8 @@ public class CameraManager : MonoBehaviour
         }
 
         angle = initialAngle;
-        SetCameraInstant(overviewCamera);
+        // SetCameraInstant(overviewCamera);
+        SetCameraInstant(orbitCamera);
         Debug.Log("[CameraManager] カメラ初期化完了");
     }
 
@@ -108,18 +121,18 @@ public class CameraManager : MonoBehaviour
     {
         float distance = 10f;
 
-        if (isPlayer)
-        {
-            SetupCameraFollow(actionCamera, target, isPlayer, Vector3.zero, distance);
-            actionCamera.transform.rotation = Quaternion.Euler(30f, 200f, 0);
-        }
-        else
-        {
-            SetupCameraFollow(actionCamera, target, isPlayer, Vector3.zero, distance);
-            actionCamera.transform.rotation = Quaternion.Euler(30f, -20f, 0);
-        }
+        // if (isPlayer)
+        // {
+        //     SetupCameraFollow(actionCamera, target, isPlayer, Vector3.zero, distance);
+        //     actionCamera.transform.rotation = Quaternion.Euler(30f, 200f, 0);
+        // }
+        // else
+        // {
+        //     SetupCameraFollow(actionCamera, target, isPlayer, Vector3.zero, distance);
+        //     actionCamera.transform.rotation = Quaternion.Euler(30f, -20f, 0);
+        // }
 
-        SetCameraInstant(actionCamera);
+        // SetCameraInstant(actionCamera);
     }
 
     // ==============================
@@ -137,74 +150,111 @@ public class CameraManager : MonoBehaviour
         SetCameraInstant(resultCamera);
     }
 
+    // ==============================
+    // 天体カメラ演出
+    // ==============================
+    public void SwitchToOrbitCamera()
+    {
+        orbitalFollow = orbitCamera.GetComponent<CinemachineOrbitalFollow>();
+        SetCameraInstant(orbitCamera);
+
+        // 0→360度を5秒でループ再生
+        DOTween.To(() => orbitalFollow.HorizontalAxis.Value, x =>
+        {
+            orbitalFollow.HorizontalAxis.Value = x;
+        }, 360f, rotationInterval)
+        .SetEase(Ease.Linear)
+        .SetLoops(-1, LoopType.Restart); // 無限ループ
+    }
+
+
+    public void SwitchToActionCamera(Transform newTarget, bool isPlayer)
+    {
+        CinemachineCamera actionCamera = isPlayer ? playerActionCamera : enemyActionCamera;
+        actionCamera.Target.TrackingTarget = newTarget;
+        actionCamera.Target.LookAtTarget = newTarget;
+        SetCameraInstant(actionCamera);
+    }
+
+
+    public void SwitchToActionCamera1(Transform newTarget, bool isPlayer)
+    {
+        CinemachineCamera actionCamera = isPlayer ? playerActionCamera_1 : enemyActionCamera_1;
+        actionCamera.Target.TrackingTarget = newTarget;
+        actionCamera.Target.LookAtTarget = newTarget;
+        SetCameraInstant(actionCamera);
+    }
 
     /// <summary>
     /// 攻撃開始時などにアクションカメラへ即切り替え
     /// </summary>
-    public void SwitchToActionCamera2(Transform target, bool isPlayer)
-    {
-        if (target == null || actionCamera == null) return;
+    // public void SwitchToActionCamera2(Transform target, bool isPlayer)
+    // {
+    //     if (target == null || actionCamera == null) return;
 
-        StopOverviewRotation();
+    //     StopOverviewRotation();
 
-        float distance = 15f;
-        // SetupCameraFollow(actionCamera, target, isEnemy, Vector3.zero, distance);
-        SetupCameraLookOnly(actionCamera, target);
-        SetCameraInstant(actionCamera);
+    //     float distance = 15f;
+    //     // SetupCameraFollow(actionCamera, target, isEnemy, Vector3.zero, distance);
+    //     SetupCameraLookOnly(actionCamera, target);
+    //     SetCameraInstant(actionCamera);
 
-    }
+    // }
 
     /// <summary>
     /// 攻撃開始時などにアクションカメラへ即切り替え
     /// ターゲットを向き続けながら、Z座標のみ移動する
     /// </summary>
-    public void SwitchToActionCamera(Transform target, bool isPlayer, Transform attacker)
-    {
-        if (target == null || actionCamera == null || attacker == null) return;
+    // public void SwitchToActionCamera(Transform target, bool isPlayer, Transform attacker)
+    // {
+    //     if (target == null || actionCamera == null || attacker == null) return;
 
-        StopOverviewRotation();
 
-        // --- 1?? 現在のカメラ位置を取得 ---
-        Vector3 startPos = actionCamera.transform.position;
+    //     actionCamera.Target.TrackingTarget = attacker;
+    //     actionCamera.Target.LookAtTarget = attacker;
+    //     // StopOverviewRotation();
 
-        // --- 2?? 目標Z座標を計算（攻撃者のZ * 2）---
-        float targetZ = attacker.position.z * 2.5f;
-        float targetX = target.position.x + 3f;
+    //     // // --- 1?? 現在のカメラ位置を取得 ---
+    //     // Vector3 startPos = actionCamera.transform.position;
 
-        // --- 3?? 新しい位置（Zだけ変更）---
-        Vector3 endPos = new Vector3(targetX, startPos.y, targetZ);
+    //     // // --- 2?? 目標Z座標を計算（攻撃者のZ * 2）---
+    //     // float targetZ = attacker.position.z * 2.5f;
+    //     // float targetX = target.position.x + 3f;
 
-        // --- 4?? カメラを即時切り替え（LookAt維持）---
-        SetCameraInstant(actionCamera);
-        SetupCameraLookOnly(actionCamera, target);
+    //     // // --- 3?? 新しい位置（Zだけ変更）---
+    //     // Vector3 endPos = new Vector3(targetX, startPos.y, targetZ);
 
-        // --- 5?? コルーチンでZ方向スライド ---
-        StartCoroutine(MoveCameraZSmooth(startPos, endPos, attacker, 0.7f));
-    }
+    //     // // --- 4?? カメラを即時切り替え（LookAt維持）---
+    //     SetCameraInstant(actionCamera);
+    //     // SetupCameraLookOnly(actionCamera, target);
+
+    //     // // --- 5?? コルーチンでZ方向スライド ---
+    //     // StartCoroutine(MoveCameraZSmooth(startPos, endPos, attacker, 0.7f));
+    // }
 
     /// <summary>
     /// カメラのZ座標だけをスムーズに移動させる
     /// </summary>
-    private IEnumerator MoveCameraZSmooth(Vector3 startPos, Vector3 endPos, Transform lookTarget, float duration)
-    {
-        float t = 0f;
+    // private IEnumerator MoveCameraZSmooth(Vector3 startPos, Vector3 endPos, Transform lookTarget, float duration)
+    // {
+    //     float t = 0f;
 
-        while (t < 1f)
-        {
-            t += Time.deltaTime / duration;
+    //     while (t < 1f)
+    //     {
+    //         t += Time.deltaTime / duration;
 
-            // 現在位置を補間（Zのみ変化）
-            float z = Mathf.Lerp(startPos.z, endPos.z, t);
-            Vector3 newPos = new Vector3(startPos.x, startPos.y, z);
-            actionCamera.transform.position = newPos;
+    //         // 現在位置を補間（Zのみ変化）
+    //         float z = Mathf.Lerp(startPos.z, endPos.z, t);
+    //         Vector3 newPos = new Vector3(startPos.x, startPos.y, z);
+    //         actionCamera.transform.position = newPos;
 
-            // ターゲットを向き続ける
-            if (lookTarget != null)
-                actionCamera.transform.LookAt(lookTarget.position + Vector3.up * 1.5f);
+    //         // ターゲットを向き続ける
+    //         if (lookTarget != null)
+    //             actionCamera.transform.LookAt(lookTarget.position + Vector3.up * 1.5f);
 
-            yield return null;
-        }
-    }
+    //         yield return null;
+    //     }
+    // }
 
     /// <summary>
     /// 攻撃終了時などに俯瞰カメラへ即切り替え
@@ -267,7 +317,12 @@ public class CameraManager : MonoBehaviour
     private void SetCameraInstant(CinemachineCamera cam)
     {
         overviewCamera.Priority = 0;
-        actionCamera.Priority = 0;
+        orbitCamera.Priority = 0;
+        playerActionCamera.Priority = 0;
+        playerActionCamera_1.Priority = 0;
+        enemyActionCamera.Priority = 0;
+        enemyActionCamera_1.Priority = 0;
+        resultCamera.Priority = 0;
         cam.Priority = 20;
 
         if (brain != null)

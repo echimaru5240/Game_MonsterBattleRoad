@@ -27,7 +27,7 @@ public class AudioManager : MonoBehaviour
 
     [Header("SE Clips")]
     public AudioClip buttonSE;
-    public AudioClip actionSE;
+    public AudioClip executeSkillSE;
     public AudioClip walkSE;
     public AudioClip attackSE;
     public AudioClip hitSE;
@@ -158,7 +158,7 @@ public class AudioManager : MonoBehaviour
     // ================================
     public void PlayHomeBGM() => PlayBGM(homeBGM);
     public void PlayButtonSE() => PlaySE(buttonSE);
-    public void PlayActionSE() => PlaySE(actionSE);
+    public void PlayExecuteSkillSE() => PlaySE(executeSkillSE);
     public void PlayWalkSE() => PlaySE(walkSE);
     public void PlayAttackSE() => PlaySE(attackSE);
     public void PlayHitSE() => PlaySE(hitSE);

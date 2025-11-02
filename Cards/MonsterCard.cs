@@ -18,10 +18,6 @@ public class MonsterCard : Card
     public GameObject prefab;
     public Sprite monsterSprite;
 
-    [Header("ƒ‚[ƒVƒ‡ƒ“SE")]
-    public ActionSE moveSE;
-    public ActionSE attackSE;
-
     private void OnEnable()
     {
         type = CardType.Monster;
