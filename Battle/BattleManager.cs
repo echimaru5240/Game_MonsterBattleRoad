@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using System.Collections;
 using System.Collections.Generic;
 
@@ -21,14 +22,14 @@ public enum BattleState
 // ================================
 public struct ActionData
 {
-    public MonsterCard user;
+    public MonsterController monster;
     public Skill skill;
     public bool isPlayer;
     public int priority;
 
-    public ActionData(MonsterCard u, Skill s, bool p, int prio)
+    public ActionData(MonsterController m, Skill s, bool p, int prio)
     {
-        user = u;
+        monster = m;
         skill = s;
         isPlayer = p;
         priority = prio;
@@ -46,15 +47,15 @@ public class BattleManager : MonoBehaviour
     [SerializeField] private GameObject battleUIPanel;
     [SerializeField] private BattleResultUIManager resultUIManager;
     [SerializeField] private GameObject resultUIPanel;
-    public BattleSpawner spawner;
+    [SerializeField] private BattleSpawner spawner;
 
-    private MonsterCard[] playerCards;
-    private MonsterCard[] enemyCards;
+    [SerializeField] private Card finisherCard;
+
+    private List<MonsterController> playerControllers = new();
+    private List<MonsterController> enemyControllers = new();
 
     public int PlayerCurrentHP { get; set; }
     public int EnemyCurrentHP { get; set; }
-    public int PlayerMaxHP { get; private set; }
-    public int EnemyMaxHP { get; private set; }
 
     // 勇気ゲージ
     private int courageGauge;
@@ -66,7 +67,7 @@ public class BattleManager : MonoBehaviour
 
     // 選択管理
     private int[] selectedByUser;
-    private List<(MonsterCard user, Skill skill)> playerActions = new();
+    private List<(MonsterController user, Skill skill)> playerActions = new();
 
     private int currentTurn = 1;
     private System.Action<bool, int> onBattleEnd;
@@ -76,22 +77,36 @@ public class BattleManager : MonoBehaviour
     // ================================
     // セットアップ
     // ================================
-    public IEnumerator SetupBattle(MonsterCard[] players, BattleStageData stage, System.Action<bool, int> onEnd, int initialCourage)
+    public IEnumerator SetupBattle(MonsterCard[] playerCards, BattleStageData stage, System.Action<bool, int> onEnd, int initialCourage)
     {
         battleUIPanel.SetActive(true);
         resultUIPanel.SetActive(false);
-        playerCards = players;
-        enemyCards = stage.enemyTeam;
         onBattleEnd = onEnd;
 
         // 戦闘BGM再生
         AudioManager.Instance.PlayBGM(stage.bgm);
 
+        // モンスター配置設定
+        spawner.SetSpawnAreaPositions(stage.isBossStage);
+        spawner.Spawn(playerCards, stage.enemyTeam);
+
+        // Controllerベースに移行
+        playerControllers = spawner.PlayerControllers;
+        enemyControllers  = spawner.EnemyControllers;
+
         // HP初期化
-        PlayerMaxHP = SumHP(players);
-        PlayerCurrentHP = PlayerMaxHP;
-        EnemyMaxHP = SumHP(stage.enemyTeam);
-        EnemyCurrentHP = EnemyMaxHP;
+        PlayerCurrentHP = SumHP(playerControllers);
+        EnemyCurrentHP = SumHP(enemyControllers);
+
+        // UI初期化
+        battleUIManager.Init(playerControllers, PlayerCurrentHP, EnemyCurrentHP, MaxCourage);
+        battleUIManager.OnSkillSelected = OnSkillSelected;
+
+
+        selectedByUser = new int[playerCards.Length];
+        for (int i = 0; i < selectedByUser.Length; i++) selectedByUser[i] = -1;
+        playerActions.Clear();
+        ResetSelections();
 
         // ターン初期化
         currentTurn = 1;
@@ -100,33 +115,18 @@ public class BattleManager : MonoBehaviour
         courageGauge = initialCourage;
         finisherReady = (courageGauge >= MaxCourage);
 
-        // 出現
-        spawner.SetSpawnAreaPositions(stage.isBossStage);
-        spawner.Spawn(players, stage.enemyTeam);
-
-
-        // UI初期化
-        battleUIManager.Init(players, PlayerCurrentHP, PlayerMaxHP, EnemyCurrentHP, EnemyMaxHP, MaxCourage);
-        battleUIManager.OnSkillSelected = OnSkillSelected;
-
-
-        selectedByUser = new int[players.Length];
-        for (int i = 0; i < selectedByUser.Length; i++) selectedByUser[i] = -1;
-        playerActions.Clear();
-        ResetSelections();
-
         // ? ステージ情報からカメラ設定
-        CameraManager.Instance.SwitchToOverviewCamera();
+        CameraManager.Instance.SwitchToOrbitCamera();//SwitchToOverviewCamera();
         battleUIManager.ShowMainText("バトル開始！");
         yield return new WaitForSeconds(2.0f);
 
         ChangeState(BattleState.TURN_START);
     }
 
-    private int SumHP(MonsterCard[] cards)
+    private int SumHP(List<MonsterController> monsters)
     {
         int sum = 0;
-        foreach (var c in cards) sum += c.hp;
+        foreach (var monster in monsters) sum += monster.hp;
         return sum;
     }
 
@@ -177,16 +177,16 @@ public class BattleManager : MonoBehaviour
     // ================================
     // スキル選択
     // ================================
-    private void OnSkillSelected(int userIndex, int skillIndex)
+    private void OnSkillSelected(int monsterIndex, int skillIndex)
     {
-        if (selectedByUser[userIndex] != -1) return;
+        if (selectedByUser[monsterIndex] != -1) return;
 
-        selectedByUser[userIndex] = skillIndex;
-        var user = playerCards[userIndex];
-        var skill = user.skills[skillIndex];
+        selectedByUser[monsterIndex] = skillIndex;
+        var monster = playerControllers[monsterIndex];
+        var skill = monster.skills[skillIndex];
 
-        playerActions.Add((user, skill));
-        Debug.Log($"{user.cardName} が {skill.skillName} を選択");
+        playerActions.Add((monster, skill));
+        Debug.Log($"{monster.name} が {skill.skillName} を選択");
 
         if (IsAllUsersSelected())
         {
@@ -196,12 +196,7 @@ public class BattleManager : MonoBehaviour
 
     private IEnumerator AllUsersSelected()
     {
-        // yield return new WaitForSeconds(0.5f); // 行動間の間を少し取る
-        // for (int i = 0; i < selectedByUser.Length; i++)
-        //     battleUIManager.SetSkillButtonFrameActive(i, selectedByUser[i], true);
         yield return new WaitForSeconds(1.0f); // 行動間の間を少し取る
-        // for (int i = 0; i < selectedByUser.Length; i++)
-        //     battleUIManager.SetSkillButtonFrameActive(i, selectedByUser[i], false);
         battleUIManager.SetButtonsActive(false);
         ChangeState(BattleState.EXECUTING);
     }
@@ -221,11 +216,10 @@ public class BattleManager : MonoBehaviour
         battleUIManager.ShowMainText("とどめの一撃発動！！");
         yield return new WaitForSeconds(1f);
 
-        Card finisherCard = playerCards[0];
         int dmg = BattleCalculator.CalculateFinisherDamage(finisherCard);
 
-        foreach (var enemy in spawner.EnemyObjects)
-            ShowDamagePopup(dmg / spawner.EnemyObjects.Count, enemy, false);
+        foreach (var enemy in enemyControllers)
+            ShowDamagePopup(dmg / enemyControllers.Count, enemy, false);
 
         EnemyCurrentHP = Mathf.Max(0, EnemyCurrentHP - dmg);
 
@@ -261,9 +255,9 @@ public class BattleManager : MonoBehaviour
         }
 
         // 敵行動
-        foreach (var enemy in enemyCards)
+        foreach (var enemy in enemyControllers)
         {
-            var skill = enemy.skills[Random.Range(0, enemy.skills.Length)];
+            var skill = enemy.skills[Random.Range(0, enemy.skills.Count)];
             int priority = enemy.speed + Random.Range(0, enemy.speed / 2);
             turnActions.Add(new ActionData(enemy, skill, false, priority));
         }
@@ -272,9 +266,9 @@ public class BattleManager : MonoBehaviour
         turnActions.Sort((first, second) => second.priority.CompareTo(first.priority));
 
         // 行動を順番に実行（完了を待つ）
-        foreach (var act in turnActions)
+        foreach (var action in turnActions)
         {
-            yield return StartCoroutine(ExecuteSkill(act.user, act.skill, act.isPlayer));
+            yield return StartCoroutine(ExecuteAction(action.monster, action.skill, action.isPlayer));
             yield return new WaitForSeconds(0.4f); // 行動間の間を少し取る
 
             if (CheckBattleEnd()) yield break;
@@ -289,17 +283,12 @@ public class BattleManager : MonoBehaviour
     // ================================
     // スキル実行
     // ================================
-    private IEnumerator ExecuteSkill(MonsterCard user, Skill skill, bool isPlayer)
+    private IEnumerator ExecuteAction(MonsterController attacker, Skill skill, bool isPlayer)
     {
-        // 攻撃モーション
-        MonsterController attackerCtrl = isPlayer
-            ? spawner.PlayerMap[user]
-            : spawner.EnemyMap[user];
-
-        AudioManager.Instance.PlayActionSE();
+        AudioManager.Instance.PlayExecuteSkillSE();
         battleUIManager.ShowActionBack(isPlayer);
-        battleUIManager.ShowAttackText(isPlayer, user.cardName, skill.skillName);
-        CameraManager.Instance.SwitchToFrontCamera(attackerCtrl.transform, isPlayer);
+        battleUIManager.ShowAttackText(isPlayer, attacker.name, skill.skillName);
+        CameraManager.Instance.SwitchToActionCamera(attacker.transform, isPlayer);
         yield return new WaitForSeconds(1.5f);
 
         List<MonsterController> targets = new();
@@ -316,9 +305,9 @@ public class BattleManager : MonoBehaviour
                         : spawner.PlayerControllers[Random.Range(0, spawner.PlayerControllers.Count)];
                     targets.Add(target);
                 }
-
+                SetMonsterPositionForAttack(attacker, targets, skill.targetType);
                 // 攻撃コルーチン実行
-                yield return StartCoroutine(attackerCtrl.PerformAttack(targets, skill));
+                yield return StartCoroutine(attacker.PerformAttack(targets, skill));
                 if (isPlayer) AddCourage(20);
                 break;
 
@@ -339,19 +328,67 @@ public class BattleManager : MonoBehaviour
 
             case SkillType.Buff:
                 float buffValue = BattleCalculator.CalculateBuffValue(skill);
-                Debug.Log($"{user.cardName} がバフ効果 {buffValue} を得た！");
+                Debug.Log($"{attacker.name} がバフ効果 {buffValue} を得た！");
                 break;
         }
 
         battleUIManager.HideAttackText(isPlayer);
         UpdateHPBars();
 
+        // モンスターの位置を戻す
+        SetMonsterPositionForWaitinig();
+
         // 戻ったら全体カメラへ
         CameraManager.Instance.SwitchToOverviewCamera();
-        attackerCtrl.ReturnToInitialPosition();
+        attacker.ReturnToInitialPosition();
         foreach (var target in targets)
             target.ReturnToInitialPosition();
+    }
 
+    // ================================
+    // 行動時のモンスターの配置
+    // ================================
+    private void SetMonsterPositionForAttack(MonsterController attacker, List<MonsterController> targets, SkillTargetType targetType)
+    {
+        foreach (var p in playerControllers)
+            p.gameObject.SetActive(false);
+
+        foreach (var e in enemyControllers)
+            e.gameObject.SetActive(false);
+
+        float attackerPosZ = attacker.transform.position.z;
+        attacker.transform.position = new Vector3(0, 0, attackerPosZ);
+        attacker.gameObject.SetActive(true);
+
+        if (targetType == SkillTargetType.All)
+        {
+            foreach (var t in targets)
+                t.gameObject.SetActive(true);
+        }
+        else
+        {
+            foreach (var t in targets)
+            {
+                float targetPosZ = t.transform.position.z;
+                t.transform.position = new Vector3(0, 0, targetPosZ);
+                t.gameObject.SetActive(true);
+            }
+        }
+    }
+
+    private void SetMonsterPositionForWaitinig()
+    {
+        foreach (var p in playerControllers)
+        {
+            p.ReturnToInitialPosition();
+            p.gameObject.SetActive(true);
+        }
+
+        foreach (var e in enemyControllers)
+        {
+            e.ReturnToInitialPosition();
+            e.gameObject.SetActive(true);
+        }
     }
 
     // ================================
@@ -418,7 +455,7 @@ public class BattleManager : MonoBehaviour
         battleUIManager.UpdateHP(PlayerCurrentHP, EnemyCurrentHP);
     }
 
-    private void ShowDamagePopup(int value, GameObject target, bool isHeal = false)
+    private void ShowDamagePopup(int value, MonsterController target, bool isHeal = false)
     {
         battleUIManager.ShowDamagePopup(value, target, isHeal);
     }

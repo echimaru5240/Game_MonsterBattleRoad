@@ -1,9 +1,10 @@
 using UnityEngine;
 using System.Collections;
+using System.Collections.Generic;
 
 public abstract class MonsterActionBase : MonoBehaviour
 {
-    public abstract IEnumerator Execute(MonsterController self, MonsterController target, Skill skill);
+    public abstract IEnumerator Execute(MonsterController self, List<MonsterController> targets, Skill skill);
 
     // ã§í ÉwÉãÉpÅ[
     protected IEnumerator MoveToTarget(MonsterController self, MonsterController target, float speed = 0.5f, float stopOffset = 1.2f)

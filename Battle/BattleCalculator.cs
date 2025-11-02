@@ -24,15 +24,11 @@ public static class BattleCalculator
         // ① ダメージ計算とポップアップ表示
         foreach (var target in targets)
         {
-            var targetCard = isPlayerSide
-                ? mgr.spawner.EnemyCards[mgr.spawner.EnemyControllers.IndexOf(target)]
-                : mgr.spawner.PlayerCards[mgr.spawner.PlayerControllers.IndexOf(target)];
-
-            var result = CalculateAttackResult(attacker.cardData, targetCard, skill, disableCritical: isMultiTarget);
+            var result = CalculateAttackResult(attacker, target, skill, disableCritical: isMultiTarget);
 
             if (!result.IsMiss)
             {
-                mgr.battleUIManager.ShowDamagePopup(result.Damage, target.gameObject, false);
+                mgr.battleUIManager.ShowDamagePopup(result.Damage, target, false);
                 totalDamage += result.Damage;
 
                 // if (!isMultiTarget && result.IsCritical)
@@ -56,7 +52,7 @@ public static class BattleCalculator
     /// <summary>
     /// 攻撃結果をまとめて返す
     /// </summary>
-    public static DamageResult CalculateAttackResult(MonsterCard attacker, MonsterCard defender, Skill skill, bool disableCritical = false)
+    public static DamageResult CalculateAttackResult(MonsterController attacker, MonsterController defender, Skill skill, bool disableCritical = false)
     {
         int damage = CalculateDamage(attacker, defender, skill);
         bool isCritical = Random.value < skill.criticalChance; // スキル側に確率を持たせる想定
@@ -76,7 +72,7 @@ public static class BattleCalculator
     // ================================
     // 通常攻撃ダメージ計算
     // ================================
-    public static int CalculateDamage(MonsterCard attacker, MonsterCard defender, Skill skill)
+    public static int CalculateDamage(MonsterController attacker, MonsterController defender, Skill skill)
     {
         int attack = attacker.attack;
         int defense = defender != null ? defender.defense : 0;
@@ -96,7 +92,7 @@ public static class BattleCalculator
     // ================================
     // 回復計算
     // ================================
-    public static int CalculateHeal(MonsterCard user, Skill skill)
+    public static int CalculateHeal(MonsterController user, Skill skill)
     {
         int heal = Mathf.RoundToInt(user.magicPower * (skill.power / 100f));
         return Mathf.Max(1, heal);

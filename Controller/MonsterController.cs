@@ -7,10 +7,22 @@ public class MonsterController : MonoBehaviour
     private Animator animator;
 
     public bool isPlayer;
-    public MonsterCard cardData;
+
+    [Header("ステータス")]
+    public string name;
+    public Sprite sprite;
+    public int hp;
+    public int attack;
+    public int magicPower; // 魔法や回復用
+    public int defense;
+    public int speed;
+
+    [Header("行動関連")]
+    public List<Skill> skills = new();
 
     // モンスターごとの行動スクリプト（動的に追加される）
     private MonsterActionBase actionBehavior;
+
 
     private Skill currentSkill;
     private List<MonsterController> currentTargets = new();
@@ -25,10 +37,20 @@ public class MonsterController : MonoBehaviour
     /// <summary>
     /// 初期化
     /// </summary>
-    public void Init(bool isPlayer, MonsterCard card)
+    public void InitializeFromCard(MonsterCard card, bool isPlayer)
     {
         this.isPlayer = isPlayer;
-        this.cardData = card;
+        name = card.cardName;
+        sprite = card.monsterSprite;
+
+        hp = card.hp;
+        attack = card.attack;
+        magicPower = card.magicPower;
+        defense = card.defense;
+        speed = card.speed;
+
+        skills = new List<Skill>(card.skills);
+
         animator = GetComponent<Animator>();
 
         // 各モンスターの攻撃スクリプトを取得
@@ -54,7 +76,7 @@ public class MonsterController : MonoBehaviour
         currentSkill = skill;
         currentTargets = targets;
 
-        yield return StartCoroutine(actionBehavior.Execute(this, targets[0], skill));
+        yield return StartCoroutine(actionBehavior.Execute(this, targets, skill));
 
         while (!attackEnded) yield return null;
         yield return new WaitForSeconds(1.5f);
@@ -70,36 +92,27 @@ public class MonsterController : MonoBehaviour
     /// <summary>
     /// 被弾アニメーション＋カメラ演出
     /// </summary>
-    public void PlayHit(Transform attacker)
+    public void PlayHit()
     {
         if (animator != null)
         {
             animator.SetTrigger("DoHit");
 
             // 吹き飛び演出
-            if (attacker != null)
-                StartCoroutine(Knockback(attacker));
-            // 被弾時の寄りカメラ
-            // if (CameraManager.Instance != null)
-            //     CameraManager.Instance?.PlayHitReactionCamera(transform, isPlayer, 1.2f);
+            StartCoroutine(Knockback());
         }
     }
 
     /// <summary>
     /// 攻撃を受けた時に吹き飛ぶ演出
     /// </summary>
-    public IEnumerator Knockback(Transform attacker, float power = 3f, float duration = 0.3f)
+    public IEnumerator Knockback(float power = 3f, float duration = 0.3f)
     {
-        if (attacker == null) yield break;
-
         Vector3 start = transform.position;
 
-        // 攻撃者 → 被弾者 方向ベクトル
-        Vector3 dir = (transform.position - attacker.position).normalized;
-        dir.y = 0f; // 上方向は不要（地面で水平に飛ばす）
 
         // 吹き飛び先の位置
-        Vector3 end = start + dir * power;
+        Vector3 end = start + (isPlayer ? Vector3.back : Vector3.forward)  * power;
 
         float t = 0f;
         while (t < 1f)
@@ -144,18 +157,6 @@ public class MonsterController : MonoBehaviour
     }
 
     /// <summary>
-    /// 攻撃をする瞬間（アニメーションイベントで呼ばれる）
-    /// </summary>
-    public void OnAttack()
-    {
-        AudioManager.Instance.PlayActionSE(cardData.attackSE);
-        // ? 攻撃エフェクトを呼び出す
-        // Vector3 effectPos = target.transform.position + Vector3.up * 1f;
-        // EffectManager.Instance.PlayEffect(actionBehavior.attackEffectType, effectPos);
-        Debug.Log("OnAttack");
-    }
-
-    /// <summary>
     /// 攻撃が当たる瞬間（アニメーションイベントで呼ばれる）
     /// </summary>
     public void OnAttackHit()
@@ -163,7 +164,7 @@ public class MonsterController : MonoBehaviour
         BattleCalculator.OnAttackHit(this, currentSkill, currentTargets);
         foreach (var target in currentTargets)
         {
-            target.PlayHit(transform); // ← 自分を渡すことで方向が決まる
+            target.PlayHit(); // ← 自分を渡すことで方向が決まる
         }
         Debug.Log("OnAttackHit");
     }
@@ -176,16 +177,5 @@ public class MonsterController : MonoBehaviour
     {
         attackEnded = true; // ← フラグONでPerformAttackが再開
         Debug.Log("OnAttackEnd");
-    }
-
-
-    /// <summary>
-    /// 移動のポイント
-    /// （アニメーションイベントから呼ばれる想定）
-    /// </summary>
-    public void OnWalkPoint()
-    {
-        AudioManager.Instance.PlayActionSE(cardData.moveSE);
-        Debug.Log("OnWalkPoint");
     }
 }
