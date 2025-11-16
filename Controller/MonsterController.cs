@@ -97,7 +97,16 @@ public class MonsterController : MonoBehaviour
         if (animator != null)
         {
             animator.SetTrigger("DoHit");
+        }
+    }
 
+    /// <summary>
+    /// 被弾アニメーション＋カメラ演出
+    /// </summary>
+    public void PlayLastHit()
+    {
+        if (animator != null)
+        {
             // 吹き飛び演出
             StartCoroutine(Knockback());
         }
@@ -115,6 +124,7 @@ public class MonsterController : MonoBehaviour
         Vector3 end = start + (isPlayer ? Vector3.back : Vector3.forward)  * power;
 
         float t = 0f;
+        animator.SetTrigger("DoLastHit");
         while (t < 1f)
         {
             t += Time.deltaTime / duration;
@@ -161,12 +171,24 @@ public class MonsterController : MonoBehaviour
     /// </summary>
     public void OnAttackHit()
     {
-        BattleCalculator.OnAttackHit(this, currentSkill, currentTargets);
         foreach (var target in currentTargets)
         {
             target.PlayHit(); // ← 自分を渡すことで方向が決まる
         }
         Debug.Log("OnAttackHit");
+    }
+
+    /// <summary>
+    /// 攻撃が当たる瞬間（アニメーションイベントで呼ばれる）
+    /// </summary>
+    public void OnAttackLastHit()
+    {
+        BattleCalculator.OnAttackHit(this, currentSkill, currentTargets);
+        foreach (var target in currentTargets)
+        {
+            target.PlayLastHit(); // ← 自分を渡すことで方向が決まる
+        }
+        Debug.Log("OnAttackLastHit");
     }
 
     /// <summary>

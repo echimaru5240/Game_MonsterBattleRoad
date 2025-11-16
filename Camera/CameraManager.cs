@@ -16,13 +16,17 @@ public class CameraManager : MonoBehaviour
 
     [Tooltip("全体を回転して映すカメラ")]
     public CinemachineCamera orbitCamera;
+    public Transform centerPos;
     private CinemachineOrbitalFollow orbitalFollow;
+    private Tween orbitTween;
 
     [Tooltip("攻撃キャラを映すアクションカメラ")]
-    public CinemachineCamera playerActionCamera;
-    public CinemachineCamera playerActionCamera_1;
-    public CinemachineCamera enemyActionCamera;
-    public CinemachineCamera enemyActionCamera_1;
+    public CinemachineCamera playerActionCameraFront;
+    public CinemachineCamera playerActionCameraBack;
+    public CinemachineCamera FixCamera_m2_13;
+    public CinemachineCamera enemyActionCameraFront;
+    public CinemachineCamera enemyActionCameraBack;
+    public CinemachineCamera FixCamera_m2_m13;
 
 
     [Tooltip("リザルト画面を映すカメラ")]
@@ -73,6 +77,8 @@ public class CameraManager : MonoBehaviour
         {
             Destroy(gameObject);
             return;
+
+
         }
         Instance = this;
         DontDestroyOnLoad(gameObject); // シーンをまたいでも保持
@@ -90,62 +96,12 @@ public class CameraManager : MonoBehaviour
         Debug.Log("[CameraManager] カメラ初期化完了");
     }
 
-    // ==============================
-    // 更新処理（俯瞰カメラ回転）
-    // ==============================
-    private void Update()
-    {
-        if (!rotateOverview) return;
-
-        float speedMod = 1f + Mathf.Sin(Time.time * 0.3f) * 0.2f;
-        angle += rotationSpeed * speedMod * Time.deltaTime;
-        float rad = angle * Mathf.Deg2Rad;
-
-        float yOffset = Mathf.Sin(Time.time * 0.5f) * heightAmplitude;
-        float currentRadius = rotationRadius + Mathf.Sin(Time.time * zoomSpeed) * zoomAmplitude;
-
-        Vector3 offset = new Vector3(Mathf.Sin(rad), 0, Mathf.Cos(rad)) * currentRadius;
-        Vector3 pos = battleCenter + offset + Vector3.up * (baseHeight + yOffset);
-
-        overviewCamera.transform.position = pos;
-        overviewCamera.transform.LookAt(battleCenter + Vector3.up * 1.5f);
-    }
-
-    // ==============================
-    // 公開制御関数
-    // ==============================
-    public void StartOverviewRotation() => rotateOverview = true;
-    public void StopOverviewRotation() => rotateOverview = false;
-
-    public void SwitchToFrontCamera(Transform target, bool isPlayer)
-    {
-        float distance = 10f;
-
-        // if (isPlayer)
-        // {
-        //     SetupCameraFollow(actionCamera, target, isPlayer, Vector3.zero, distance);
-        //     actionCamera.transform.rotation = Quaternion.Euler(30f, 200f, 0);
-        // }
-        // else
-        // {
-        //     SetupCameraFollow(actionCamera, target, isPlayer, Vector3.zero, distance);
-        //     actionCamera.transform.rotation = Quaternion.Euler(30f, -20f, 0);
-        // }
-
-        // SetCameraInstant(actionCamera);
-    }
 
     // ==============================
     // リザルトカメラ演出
     // ==============================
     public void SwitchToResultCamera()
     {
-        StopOverviewRotation();
-
-        // カメラ位置・向き設定（後方からやや上）
-        // actionCamera.transform.position = new Vector3(0f, 5f, -20f);
-        // actionCamera.transform.rotation = Quaternion.Euler(10f, 0f, 0f);
-
         // カメラを即時切り替え
         SetCameraInstant(resultCamera);
     }
@@ -155,7 +111,32 @@ public class CameraManager : MonoBehaviour
     // ==============================
     public void SwitchToOrbitCamera()
     {
+        Debug.Log("SwitchToOrbitCamera");
+
+        if (orbitCamera == null)
+        {
+            Debug.LogWarning("orbitCamera が設定されていません");
+            return;
+        }
+
         orbitalFollow = orbitCamera.GetComponent<CinemachineOrbitalFollow>();
+        if (orbitalFollow == null)
+        {
+            Debug.LogWarning("CinemachineOrbitalFollow が orbitCamera に見つかりません");
+            return;
+        }
+
+        orbitCamera.Target.TrackingTarget = centerPos;
+
+        // ① 既存のTweenを殺す（多重生成防止）
+        if (orbitTween != null && orbitTween.IsActive())
+        {
+            orbitTween.Kill();
+            orbitTween = null;
+        }
+
+        // ② 角度をリセット
+        orbitalFollow.HorizontalAxis.Value = 0f;
         SetCameraInstant(orbitCamera);
 
         // 0→360度を5秒でループ再生
@@ -164,22 +145,33 @@ public class CameraManager : MonoBehaviour
             orbitalFollow.HorizontalAxis.Value = x;
         }, 360f, rotationInterval)
         .SetEase(Ease.Linear)
+        .SetRelative(true)          // ← ここがポイント。「+360度」を毎回足すイメージ
         .SetLoops(-1, LoopType.Restart); // 無限ループ
     }
 
 
-    public void SwitchToActionCamera(Transform newTarget, bool isPlayer)
+    public void SwitchToActionCameraFront(Transform newTarget, bool isPlayer)
     {
-        CinemachineCamera actionCamera = isPlayer ? playerActionCamera : enemyActionCamera;
+        CinemachineCamera actionCamera = isPlayer ? playerActionCameraFront : enemyActionCameraFront;
         actionCamera.Target.TrackingTarget = newTarget;
         actionCamera.Target.LookAtTarget = newTarget;
         SetCameraInstant(actionCamera);
     }
 
 
-    public void SwitchToActionCamera1(Transform newTarget, bool isPlayer)
+    public void SwitchToActionCameraBack(Transform newTarget, bool isPlayer)
     {
-        CinemachineCamera actionCamera = isPlayer ? playerActionCamera_1 : enemyActionCamera_1;
+        CinemachineCamera actionCamera = isPlayer ? playerActionCameraBack : enemyActionCameraBack;
+        actionCamera.Target.TrackingTarget = newTarget;
+        actionCamera.Target.LookAtTarget = newTarget;
+        SetCameraInstant(actionCamera);
+    }
+
+
+
+    public void SwitchToFixedBackCamera(Transform newTarget, bool isPlayer)
+    {
+        CinemachineCamera actionCamera = isPlayer ? FixCamera_m2_13 : FixCamera_m2_m13;
         actionCamera.Target.TrackingTarget = newTarget;
         actionCamera.Target.LookAtTarget = newTarget;
         SetCameraInstant(actionCamera);
@@ -256,14 +248,6 @@ public class CameraManager : MonoBehaviour
     //     }
     // }
 
-    /// <summary>
-    /// 攻撃終了時などに俯瞰カメラへ即切り替え
-    /// </summary>
-    public void SwitchToOverviewCamera()
-    {
-        SetCameraInstant(overviewCamera);
-        StartOverviewRotation();
-    }
 
     // ==============================
     // 内部Cinemachine設定
@@ -316,19 +300,21 @@ public class CameraManager : MonoBehaviour
     // ==============================
     private void SetCameraInstant(CinemachineCamera cam)
     {
-        overviewCamera.Priority = 0;
-        orbitCamera.Priority = 0;
-        playerActionCamera.Priority = 0;
-        playerActionCamera_1.Priority = 0;
-        enemyActionCamera.Priority = 0;
-        enemyActionCamera_1.Priority = 0;
-        resultCamera.Priority = 0;
-        cam.Priority = 20;
-
         if (brain != null)
         {
             var blend = new CinemachineBlendDefinition(CinemachineBlendDefinition.Styles.Cut, 0f);
             brain.DefaultBlend = blend;
         }
+        overviewCamera.Priority = 0;
+        orbitCamera.Priority = 0;
+        playerActionCameraFront.Priority = 0;
+        playerActionCameraBack.Priority = 0;
+        FixCamera_m2_13.Priority = 0;
+        enemyActionCameraFront.Priority = 0;
+        enemyActionCameraBack.Priority = 0;
+        FixCamera_m2_m13.Priority = 0;
+        resultCamera.Priority = 0;
+        cam.Priority = 20;
+
     }
 }

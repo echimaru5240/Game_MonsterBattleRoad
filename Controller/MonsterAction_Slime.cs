@@ -55,6 +55,7 @@ public class MonsterAction_Slime : MonsterActionBase
         // =============================
         // ? 3回ジグザグ
         // =============================
+        CameraManager.Instance.SwitchToActionCameraBack(self.transform, self.isPlayer);
         for (int i = 0; i < 3; i++)
         {
             Vector3 dir = new Vector3((i % 2 == 0 ? 1 : -1) * zigzagAmplitude, 0, 0);
@@ -62,12 +63,15 @@ public class MonsterAction_Slime : MonsterActionBase
 
             seq.AppendCallback(() => {
                 anim.SetTrigger("DoMove");
-                if (moveSE != null) AudioManager.Instance.PlayActionSE(moveSE);
             });
 
             seq.Append(self.transform.DOMove(targetPos, moveDuration)
                 .SetEase(Ease.OutSine));
         }
+
+        seq.AppendCallback(() => {
+            CameraManager.Instance.SwitchToFixedBackCamera(self.transform, self.isPlayer);
+        });
 
         // =============================
         // ? ジャンプ（上昇→ターゲット落下）
@@ -89,12 +93,8 @@ public class MonsterAction_Slime : MonsterActionBase
             .SetEase(Ease.InCubic)
             .OnStart(() => {
                 anim.SetTrigger("DoAttack");
-                // if (attackSE) AudioManager.Instance.PlaySE(attackSE);
             })
         );
-        seq.AppendCallback(() => {
-            CameraManager.Instance.SwitchToActionCamera1(self.transform, self.isPlayer);
-        });
 
         // 攻撃の余韻時間（砂煙などを出すならここ）
         seq.AppendInterval(0.1f);
@@ -123,6 +123,15 @@ public class MonsterAction_Slime : MonsterActionBase
 
         // シーケンス終了を待機
         yield return seq.WaitForCompletion();
+    }
+
+    /// <summary>
+    /// 動く瞬間（アニメーションイベントで呼ばれる）
+    /// </summary>
+    public void OnMove_Skill1()
+    {
+        if (attackSE != null) AudioManager.Instance.PlayActionSE(moveSE);
+        Debug.Log("OnMove");
     }
 
     /// <summary>
