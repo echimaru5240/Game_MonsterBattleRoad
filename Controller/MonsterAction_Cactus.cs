@@ -3,11 +3,11 @@ using System.Collections;
 using System.Collections.Generic;
 using DG.Tweening;
 
-public class MonsterAction_Turtle : MonsterActionBase
+public class MonsterAction_Cactus : MonsterActionBase
 {
-    [Header("スライム演出設定")]
-    public float moveDuration = 0.3f;    // 1回のジグザグ時間
-    public float zigzagAmplitude = 1.2f; // ジグザグ幅
+    [Header("演出設定")]
+    public float moveSpeed = 0.5f;    // 移動速度
+    public float stopOffset = 1.2f;
     public float jumpHeight = 2.5f;
     public float jumpDuration = 0.4f;
     public float diveDuration = 0.25f;   // 急降下時間
@@ -32,7 +32,7 @@ public class MonsterAction_Turtle : MonsterActionBase
 
         switch (skill.skillName)
         {
-            case "くるくるアタック":
+            case "突き刺す":
                 yield return StartCoroutine(Execute_Skill1(self, targets));
                 break;
             default:
@@ -46,10 +46,41 @@ public class MonsterAction_Turtle : MonsterActionBase
     private IEnumerator Execute_Skill1(MonsterController self, List<MonsterController> targets)
     {
         var anim = self.GetComponent<Animator>();
+        Vector3 start = self.transform.position;
+        Vector3 end = targets[0].transform.position + (self.isPlayer ? Vector3.back : Vector3.forward) * stopOffset;
+        Quaternion startRot = self.transform.rotation;
+        Debug.Log($"突き刺す！");
+
+        // ? ターゲット方向を向く
+        Vector3 dir = (end - start).normalized;
+        dir.y = 0;
+        Quaternion lookRot = Quaternion.LookRotation(dir);
+        self.transform.rotation = lookRot;
+
+        // 前進
+        anim.SetBool("IsMove", true);
+        Debug.Log($"IsMove");
+        float t = 0f;
+        while (t < 1f)
+        {
+            t += Time.deltaTime * moveSpeed;
+            self.transform.position = Vector3.Lerp(start, end, t);
+            yield return null;
+        }
+        self.transform.rotation = startRot;
+        anim.SetBool("IsMove", false);
+
+        // 攻撃
         anim.SetTrigger("DoAttack");
-            CameraManager.Instance.SwitchToFixedBackCamera(targets[0].transform, targets[0].isPlayer);
-        // シーケンス終了を待機
-        yield return null;
+    }
+
+    /// <summary>
+    /// 動く瞬間（アニメーションイベントで呼ばれる）
+    /// </summary>
+    public void OnMove_Skill1()
+    {
+        if (attackSE != null) AudioManager.Instance.PlayActionSE(moveSE);
+        Debug.Log("OnMove");
     }
 
     /// <summary>

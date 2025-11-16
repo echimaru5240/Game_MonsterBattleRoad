@@ -101,6 +101,7 @@ public class BattleManager : MonoBehaviour
         // UI初期化
         battleUIManager.Init(playerControllers, PlayerCurrentHP, EnemyCurrentHP, MaxCourage);
         battleUIManager.OnSkillSelected = OnSkillSelected;
+        battleUIManager.OnBattleEnd = OnBattleEnd;
 
 
         selectedByUser = new int[playerCards.Length];
@@ -116,7 +117,7 @@ public class BattleManager : MonoBehaviour
         finisherReady = (courageGauge >= MaxCourage);
 
         // ? ステージ情報からカメラ設定
-        CameraManager.Instance.SwitchToOrbitCamera();//SwitchToOverviewCamera();
+        CameraManager.Instance.SwitchToOrbitCamera();
         battleUIManager.ShowMainText("バトル開始！");
         yield return new WaitForSeconds(2.0f);
 
@@ -269,10 +270,11 @@ public class BattleManager : MonoBehaviour
         foreach (var action in turnActions)
         {
             yield return StartCoroutine(ExecuteAction(action.monster, action.skill, action.isPlayer));
-            yield return new WaitForSeconds(0.4f); // 行動間の間を少し取る
 
             if (CheckBattleEnd()) yield break;
         }
+        // 戻ったら全体カメラへ
+        CameraManager.Instance.SwitchToOrbitCamera();
 
         playerActions.Clear();
         currentTurn++;
@@ -288,7 +290,7 @@ public class BattleManager : MonoBehaviour
         AudioManager.Instance.PlayExecuteSkillSE();
         battleUIManager.ShowActionBack(isPlayer);
         battleUIManager.ShowAttackText(isPlayer, attacker.name, skill.skillName);
-        CameraManager.Instance.SwitchToActionCamera(attacker.transform, isPlayer);
+        CameraManager.Instance.SwitchToActionCameraFront(attacker.transform, isPlayer);
         yield return new WaitForSeconds(1.5f);
 
         List<MonsterController> targets = new();
@@ -337,12 +339,6 @@ public class BattleManager : MonoBehaviour
 
         // モンスターの位置を戻す
         SetMonsterPositionForWaitinig();
-
-        // 戻ったら全体カメラへ
-        CameraManager.Instance.SwitchToOverviewCamera();
-        attacker.ReturnToInitialPosition();
-        foreach (var target in targets)
-            target.ReturnToInitialPosition();
     }
 
     // ================================
@@ -443,6 +439,11 @@ public class BattleManager : MonoBehaviour
                 playerController.PlayResultWin(false);
             onBattleEnd?.Invoke(playerWon, courageGauge);
         });
+    }
+
+    public void OnBattleEnd()
+    {
+        onBattleEnd?.Invoke(false, 0);
     }
 
     private void ResetSelections()

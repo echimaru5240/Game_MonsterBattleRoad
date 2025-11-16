@@ -39,6 +39,7 @@ public class BattleUIManager : MonoBehaviour
 
     // コールバック
     public Action<int, int> OnSkillSelected;
+    public Action OnBattleEnd;
 
     // 内部管理
     private Dictionary<int, List<Button>> buttonsByUser = new Dictionary<int, List<Button>>();
@@ -367,6 +368,11 @@ public class BattleUIManager : MonoBehaviour
         }
 
         OnSkillSelected?.Invoke(userIndex, skillIndex);
+    }
+
+    public void OnBattleEndButton()
+    {
+        OnBattleEnd?.Invoke();
     }
 
     /// <summary>
