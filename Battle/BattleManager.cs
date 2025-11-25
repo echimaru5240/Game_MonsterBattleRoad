@@ -23,11 +23,11 @@ public enum BattleState
 public struct ActionData
 {
     public MonsterController monster;
-    public Skill skill;
+    public SkillData skill;
     public bool isPlayer;
     public int priority;
 
-    public ActionData(MonsterController m, Skill s, bool p, int prio)
+    public ActionData(MonsterController m, SkillData s, bool p, int prio)
     {
         monster = m;
         skill = s;
@@ -67,7 +67,7 @@ public class BattleManager : MonoBehaviour
 
     // 選択管理
     private int[] selectedByUser;
-    private List<(MonsterController user, Skill skill)> playerActions = new();
+    private List<(MonsterController user, SkillData skill)> playerActions = new();
 
     private int currentTurn = 1;
     private System.Action<bool, int> onBattleEnd;
@@ -184,7 +184,7 @@ public class BattleManager : MonoBehaviour
 
         selectedByUser[monsterIndex] = skillIndex;
         var monster = playerControllers[monsterIndex];
-        var skill = monster.skills[skillIndex];
+        var skill = SkillDatabase.Get(monster.skills[skillIndex]);
 
         playerActions.Add((monster, skill));
         Debug.Log($"{monster.name} が {skill.skillName} を選択");
@@ -215,8 +215,16 @@ public class BattleManager : MonoBehaviour
     private IEnumerator ExecuteFinisher()
     {
         battleUIManager.ShowMainText("とどめの一撃発動！！");
-        yield return new WaitForSeconds(1f);
+        CameraManager.Instance.SwitchToFixedBackCamera(enemyControllers[0].transform, false);
+        yield return new WaitForSeconds(2f);
 
+        // 攻撃エフェクトを呼び出す
+        foreach (var enemy in enemyControllers)
+        {
+            Vector3 effectPos = enemy.transform.position + Vector3.up * 1f;
+            EffectManager.Instance.PlayEffect(EffectID.EFFECT_ID_EXPLOSION_SMALL, effectPos);
+            enemy.PlayLastHit();
+        }
         int dmg = BattleCalculator.CalculateFinisherDamage(finisherCard);
 
         foreach (var enemy in enemyControllers)
@@ -230,7 +238,7 @@ public class BattleManager : MonoBehaviour
         finisherReady = false;
         battleUIManager.UpdateCourage(courageGauge, MaxCourage);
 
-        yield return new WaitForSeconds(0.5f);
+        yield return new WaitForSeconds(1f);
 
         if (CheckBattleEnd()) yield break;
 
@@ -258,7 +266,7 @@ public class BattleManager : MonoBehaviour
         // 敵行動
         foreach (var enemy in enemyControllers)
         {
-            var skill = enemy.skills[Random.Range(0, enemy.skills.Count)];
+            var skill = SkillDatabase.Get(enemy.skills[Random.Range(0, enemy.skills.Count)]);
             int priority = enemy.speed + Random.Range(0, enemy.speed / 2);
             turnActions.Add(new ActionData(enemy, skill, false, priority));
         }
@@ -285,7 +293,7 @@ public class BattleManager : MonoBehaviour
     // ================================
     // スキル実行
     // ================================
-    private IEnumerator ExecuteAction(MonsterController attacker, Skill skill, bool isPlayer)
+    private IEnumerator ExecuteAction(MonsterController attacker, SkillData skill, bool isPlayer)
     {
         AudioManager.Instance.PlayExecuteSkillSE();
         battleUIManager.ShowActionBack(isPlayer);
@@ -295,10 +303,10 @@ public class BattleManager : MonoBehaviour
 
         List<MonsterController> targets = new();
 
-        switch (skill.type)
+        switch (skill.action)
         {
-            case SkillType.Attack:
-                if (skill.targetType == SkillTargetType.All)
+            case SkillAction.ATTACK:
+                if (skill.targetType == TargetType.ENEMY_ALL)
                     targets.AddRange(isPlayer ? spawner.EnemyControllers : spawner.PlayerControllers);
                 else
                 {
@@ -309,26 +317,26 @@ public class BattleManager : MonoBehaviour
                 }
                 SetMonsterPositionForAttack(attacker, targets, skill.targetType);
                 // 攻撃コルーチン実行
-                yield return StartCoroutine(attacker.PerformAttack(targets, skill));
+                yield return StartCoroutine(attacker.PerformAction(targets, skill));
                 if (isPlayer) AddCourage(20);
                 break;
 
-            case SkillType.Heal:
-                // int heal = BattleCalculator.CalculateHeal(user, skill);
-                // if (isPlayer)
-                // {
-                //     playerCurrentHP = Mathf.Min(playerMaxHP, playerCurrentHP + heal);
-                //     ShowDamagePopup(heal, spawner.PlayerObjects[0], true);
-                //     AddCourage(10);
-                // }
-                // else
-                // {
-                //     EnemyCurrentHP = Mathf.Min(enemyMaxHP, EnemyCurrentHP + heal);
-                //     ShowDamagePopup(heal, spawner.EnemyObjects[0], true);
-                // }
+            case SkillAction.HEAL:
+                if (skill.targetType == TargetType.ENEMY_ALL)
+                    targets.AddRange(isPlayer ? spawner.PlayerControllers : spawner.EnemyControllers);
+                else
+                {
+                    var target = isPlayer
+                        ? spawner.PlayerControllers[Random.Range(0, spawner.PlayerControllers.Count)]
+                        : spawner.EnemyControllers[Random.Range(0, spawner.EnemyControllers.Count)];
+                    targets.Add(target);
+                }
+                // 攻撃コルーチン実行
+                yield return StartCoroutine(attacker.PerformAction(targets, skill));
+                if (isPlayer) AddCourage(20);
                 break;
 
-            case SkillType.Buff:
+            case SkillAction.SPECIAL:
                 float buffValue = BattleCalculator.CalculateBuffValue(skill);
                 Debug.Log($"{attacker.name} がバフ効果 {buffValue} を得た！");
                 break;
@@ -344,7 +352,7 @@ public class BattleManager : MonoBehaviour
     // ================================
     // 行動時のモンスターの配置
     // ================================
-    private void SetMonsterPositionForAttack(MonsterController attacker, List<MonsterController> targets, SkillTargetType targetType)
+    private void SetMonsterPositionForAttack(MonsterController attacker, List<MonsterController> targets, TargetType targetType)
     {
         foreach (var p in playerControllers)
             p.gameObject.SetActive(false);
@@ -356,7 +364,7 @@ public class BattleManager : MonoBehaviour
         attacker.transform.position = new Vector3(0, 0, attackerPosZ);
         attacker.gameObject.SetActive(true);
 
-        if (targetType == SkillTargetType.All)
+        if (targetType == TargetType.ENEMY_ALL)
         {
             foreach (var t in targets)
                 t.gameObject.SetActive(true);
@@ -419,6 +427,7 @@ public class BattleManager : MonoBehaviour
 
     private IEnumerator EndBattle(bool playerWon)
     {
+        CameraManager.Instance.SwitchToOrbitCamera();
         yield return new WaitForSeconds(1.5f); // 行動間の間を少し取る
         battleUIPanel.SetActive(false);
         resultUIPanel.SetActive(true);

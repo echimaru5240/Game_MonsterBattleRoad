@@ -8,32 +8,32 @@ public class MonsterAction_Chest : MonsterActionBase
     [Header("演出設定")]
     public float moveSpeed = 0.5f;    // 移動速度
     public float stopOffset = 1.2f;
-    public float jumpHeight = 2.5f;
-    public float jumpDuration = 0.4f;
-    public float diveDuration = 0.25f;   // 急降下時間
-    public float slideDistance = 1.2f;
-    public float slideDuration = 0.3f;
 
     [Header("モーションSE")]
-    public ActionSE moveSE;
-    public ActionSE attackSE;
-    public ActionSE jumpSE;
+    public SoundEffectID moveSE;
+    public SoundEffectID attackSE;
+    public SoundEffectID jumpSE;
+
+    [Header("エフェクト")]
+    public EffectID skill1Effect;
 
     private List<MonsterController> currentTargets = new();
+    private SkillData currentSkill;
 
-    // ? 攻撃ヒット時のパーティクルプレハブ
-
-    [Header("攻撃エフェクトタイプ")]
-    public AttackEffectType attackEffectType = AttackEffectType.ExplosionSmall;
-
-    public override IEnumerator Execute(MonsterController self, List<MonsterController> targets, Skill skill)
+    public override IEnumerator Execute(MonsterController self, List<MonsterController> targets, SkillData skill)
     {
         currentTargets = targets;
+        currentSkill = skill;
 
-        switch (skill.skillName)
+        switch (skill.skillID)
         {
-            case "噛みつく":
+            /* トラップバイト */
+            case SkillID.SKILL_ID_TRAP_BITE:
                 yield return StartCoroutine(Execute_Skill1(self, targets));
+                break;
+            /* フロストバイト */
+            case SkillID.SKILL_ID_FROST_BITE:
+                yield return StartCoroutine(Execute_Skill2(self, targets));
                 break;
             default:
                 Debug.LogWarning($"{self.name} のスキル「{skill.skillName}」は未実装です。");
@@ -98,7 +98,7 @@ public class MonsterAction_Chest : MonsterActionBase
     {
         // 攻撃エフェクトを呼び出す
         Vector3 effectPos = currentTargets[0].transform.position + Vector3.up * 1f;
-        EffectManager.Instance.PlayEffect(attackEffectType, effectPos);
+        EffectManager.Instance.PlayEffect(skill1Effect, effectPos);
         Debug.Log("OnAttackHit");
     }
 

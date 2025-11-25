@@ -18,13 +18,13 @@ public class MonsterController : MonoBehaviour
     public int speed;
 
     [Header("行動関連")]
-    public List<Skill> skills = new();
+    public List<SkillID> skills = new();
 
     // モンスターごとの行動スクリプト（動的に追加される）
     private MonsterActionBase actionBehavior;
 
 
-    private Skill currentSkill;
+    private SkillData currentSkill;
     private List<MonsterController> currentTargets = new();
 
     // ? 元の位置を保存しておく
@@ -49,7 +49,7 @@ public class MonsterController : MonoBehaviour
         defense = card.defense;
         speed = card.speed;
 
-        skills = new List<Skill>(card.skills);
+        skills = new List<SkillID>(card.skills);
 
         animator = GetComponent<Animator>();
 
@@ -66,7 +66,7 @@ public class MonsterController : MonoBehaviour
         initialRotation = transform.rotation;
     }
 
-    public IEnumerator PerformAttack(List<MonsterController> targets, Skill skill)
+    public IEnumerator PerformAction(List<MonsterController> targets, SkillData skill)
     {
         if (actionBehavior == null || targets == null || targets.Count == 0)
             yield break;
@@ -197,7 +197,7 @@ public class MonsterController : MonoBehaviour
     /// </summary>
     public void OnAttackEnd()
     {
-        attackEnded = true; // ← フラグONでPerformAttackが再開
+        attackEnded = true; // ← フラグONでPerformActionが再開
         Debug.Log("OnAttackEnd");
     }
 }
