@@ -11,7 +11,7 @@ public static class BattleCalculator
         public bool IsMiss;
     }
 
-    public static void OnAttackHit(MonsterController attacker, Skill skill, List<MonsterController> targets)
+    public static void OnAttackHit(MonsterController attacker, SkillData skill, List<MonsterController> targets)
     {
         var mgr = BattleManager.Instance;
         bool isPlayerSide = attacker.isPlayer;
@@ -52,10 +52,10 @@ public static class BattleCalculator
     /// <summary>
     /// 攻撃結果をまとめて返す
     /// </summary>
-    public static DamageResult CalculateAttackResult(MonsterController attacker, MonsterController defender, Skill skill, bool disableCritical = false)
+    public static DamageResult CalculateAttackResult(MonsterController attacker, MonsterController defender, SkillData skill, bool disableCritical = false)
     {
         int damage = CalculateDamage(attacker, defender, skill);
-        bool isCritical = Random.value < skill.criticalChance; // スキル側に確率を持たせる想定
+        bool isCritical = Random.value < skill.criticalRate ; // スキル側に確率を持たせる想定
         if (isCritical)
         {
             damage = Mathf.RoundToInt(damage * 1.5f);
@@ -65,14 +65,14 @@ public static class BattleCalculator
         {
             Damage = damage,
             IsCritical = isCritical,
-            IsMiss = Random.value < skill.missChance // ミス判定などもここで
+            IsMiss = Random.value > skill.accuracy // ミス判定などもここで
         };
     }
 
     // ================================
     // 通常攻撃ダメージ計算
     // ================================
-    public static int CalculateDamage(MonsterController attacker, MonsterController defender, Skill skill)
+    public static int CalculateDamage(MonsterController attacker, MonsterController defender, SkillData skill)
     {
         int attack = attacker.attack;
         int defense = defender != null ? defender.defense : 0;
@@ -92,7 +92,7 @@ public static class BattleCalculator
     // ================================
     // 回復計算
     // ================================
-    public static int CalculateHeal(MonsterController user, Skill skill)
+    public static int CalculateHeal(MonsterController user, SkillData skill)
     {
         int heal = Mathf.RoundToInt(user.magicPower * (skill.power / 100f));
         return Mathf.Max(1, heal);
@@ -101,7 +101,7 @@ public static class BattleCalculator
     // ================================
     // バフ計算
     // ================================
-    public static float CalculateBuffValue(Skill skill)
+    public static float CalculateBuffValue(SkillData skill)
     {
         return (skill.power - 100) / 100f; // 120なら+20%
     }

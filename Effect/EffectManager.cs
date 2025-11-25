@@ -4,7 +4,8 @@ using System.Collections.Generic;
 [System.Serializable]
 public class EffectData
 {
-    public AttackEffectType type;
+    public EffectID effectID;
+    public SoundEffectID seID;
     public GameObject prefab;
 }
 
@@ -15,7 +16,7 @@ public class EffectManager : MonoBehaviour
     [Header("攻撃エフェクト一覧")]
     public List<EffectData> effectList = new();
 
-    private Dictionary<AttackEffectType, GameObject> effectDict = new();
+    private Dictionary<EffectID, EffectData> effectDict = new();
 
     private void Awake()
     {
@@ -28,7 +29,7 @@ public class EffectManager : MonoBehaviour
             foreach (var e in effectList)
             {
                 if (e != null && e.prefab != null)
-                    effectDict[e.type] = e.prefab;
+                    effectDict[e.effectID] = e;
             }
         }
         else
@@ -40,18 +41,22 @@ public class EffectManager : MonoBehaviour
     /// <summary>
     /// 指定タイプのエフェクトを生成
     /// </summary>
-    public GameObject PlayEffect(AttackEffectType type, Vector3 position, Quaternion? rotation = null, float lifeTime = 2.5f)
+    public GameObject PlayEffect(EffectID effectID, Vector3 position, Quaternion? rotation = null, float lifeTime = 2.5f)
     {
-        if (!effectDict.ContainsKey(type))
+        if (!effectDict.TryGetValue(effectID, out var data))
         {
-            Debug.LogWarning($"EffectManager: 指定タイプ {type} のエフェクトが見つかりません。");
+            Debug.LogWarning($"EffectManager: 指定タイプ {effectID} のエフェクトが見つかりません。");
             return null;
         }
 
-        var prefab = effectDict[type];
         Quaternion rot = rotation ?? Quaternion.Euler(90f, 0, 0);
-        GameObject effect = Instantiate(prefab, position, rot);
+        GameObject effect = Instantiate(data.prefab, position, rot);
         Destroy(effect, lifeTime);
+        // ? SE 再生（Noneならスキップ）
+        if (data.seID != null)
+        {
+            AudioManager.Instance.PlayActionSE(data.seID);
+        }
         return effect;
     }
 }

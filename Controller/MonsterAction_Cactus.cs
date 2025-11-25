@@ -15,25 +15,30 @@ public class MonsterAction_Cactus : MonsterActionBase
     public float slideDuration = 0.3f;
 
     [Header("モーションSE")]
-    public ActionSE moveSE;
-    public ActionSE attackSE;
-    public ActionSE jumpSE;
+    public SoundEffectID moveSE;
+    public SoundEffectID attackSE;
+    public SoundEffectID jumpSE;
+
+    [Header("エフェクト")]
+    public EffectID skill1Effect;
 
     private List<MonsterController> currentTargets = new();
+    private SkillData currentSkill;
 
-    // ? 攻撃ヒット時のパーティクルプレハブ
-
-    [Header("攻撃エフェクトタイプ")]
-    public AttackEffectType attackEffectType = AttackEffectType.ExplosionSmall;
-
-    public override IEnumerator Execute(MonsterController self, List<MonsterController> targets, Skill skill)
+    public override IEnumerator Execute(MonsterController self, List<MonsterController> targets, SkillData skill)
     {
         currentTargets = targets;
+        currentSkill = skill;
 
-        switch (skill.skillName)
+        switch (skill.skillID)
         {
-            case "突き刺す":
+            /* ニードルダンス */
+            case SkillID.SKILL_ID_TOUSAND_NEEDLE:
                 yield return StartCoroutine(Execute_Skill1(self, targets));
+                break;
+            /* サボテンジュース */
+            case SkillID.SKILL_ID_ENERGY_CACTUS:
+                yield return StartCoroutine(Execute_Skill2(self, targets));
                 break;
             default:
                 Debug.LogWarning($"{self.name} のスキル「{skill.skillName}」は未実装です。");
@@ -99,7 +104,7 @@ public class MonsterAction_Cactus : MonsterActionBase
     {
         // 攻撃エフェクトを呼び出す
         Vector3 effectPos = currentTargets[0].transform.position + Vector3.up * 1f;
-        EffectManager.Instance.PlayEffect(attackEffectType, effectPos);
+        EffectManager.Instance.PlayEffect(skill1Effect, effectPos);
         Debug.Log("OnAttackHit");
     }
 

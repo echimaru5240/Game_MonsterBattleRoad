@@ -6,7 +6,7 @@ public class MonsterAction_Common : MonsterActionBase
 {
     public float moveSpeed = 0.5f;
 
-    public override IEnumerator Execute(MonsterController self, List<MonsterController> targets, Skill skill)
+    public override IEnumerator Execute(MonsterController self, List<MonsterController> targets, SkillData skill)
     {
         var anim = self.GetComponent<Animator>();
 

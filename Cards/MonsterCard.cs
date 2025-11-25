@@ -12,7 +12,7 @@ public class MonsterCard : Card
     public int speed;
 
     [Header("スキル")]
-    public Skill[] skills;
+    public SkillID[] skills;
 
     [Header("表示用")]
     public GameObject prefab;

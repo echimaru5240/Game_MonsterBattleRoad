@@ -20,23 +20,17 @@ public class AudioManager : MonoBehaviour
 
     [Header("BGM Clips")]
     public AudioClip homeBGM;
-    public AudioClip battleBGM;
-    public AudioClip bossBGM;
     public AudioClip victoryBGM;
     public AudioClip defeatBGM;
 
     [Header("SE Clips")]
     public AudioClip buttonSE;
     public AudioClip executeSkillSE;
-    public AudioClip walkSE;
-    public AudioClip attackSE;
-    public AudioClip hitSE;
-    public AudioClip finisherSE;
     public AudioClip courageMaxSE;
 
     [Header("ŒÂ•ÊSE“o˜^")]
-    [SerializeField] private List<ActionSEData> seDataList = new List<ActionSEData>();
-    private Dictionary<ActionSE, AudioClip> seDictionary = new();
+    [SerializeField] private List<SoundEffectIDData> seDataList = new List<SoundEffectIDData>();
+    private Dictionary<SoundEffectID, AudioClip> seDictionary = new();
 
     public float fadeDuration = 1.0f;
 
@@ -141,7 +135,7 @@ public class AudioManager : MonoBehaviour
     }
 
 
-    public void PlayActionSE(ActionSE type)
+    public void PlayActionSE(SoundEffectID type)
     {
         if (seDictionary.TryGetValue(type, out AudioClip clip))
         {
@@ -159,9 +153,5 @@ public class AudioManager : MonoBehaviour
     public void PlayHomeBGM() => PlayBGM(homeBGM);
     public void PlayButtonSE() => PlaySE(buttonSE);
     public void PlayExecuteSkillSE() => PlaySE(executeSkillSE);
-    public void PlayWalkSE() => PlaySE(walkSE);
-    public void PlayAttackSE() => PlaySE(attackSE);
-    public void PlayHitSE() => PlaySE(hitSE);
-    public void PlayFinisherSE() => PlaySE(finisherSE);
     public void PlayCourageMaxSE() => PlaySE(courageMaxSE);
 }

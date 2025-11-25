@@ -64,7 +64,7 @@ public class BattleUIManager : MonoBehaviour
         // HPバー初期化
         m_OldPlayerHP = 0;
         m_OldEnemyHP = 0;
-        UpdateHP(playerHP, enemyHP);
+        UpdateHP(playerHP, enemyHP, 1.0f);
 
         playerActionBackParent.gameObject.SetActive(false);
         enemyActionBackParent.gameObject.SetActive(false);
@@ -83,21 +83,21 @@ public class BattleUIManager : MonoBehaviour
     // ================================
     // HP更新
     // ================================
-    public void UpdateHP(int playerHP, int enemyHP)
+    public void UpdateHP(int playerHP, int enemyHP, float totalDuration = 0.5f)
     {
         // HP(数字)を徐々に変化
         if (playerHpTextRoutine != null) StopCoroutine(playerHpTextRoutine);
         if (enemyHpTextRoutine != null) StopCoroutine(enemyHpTextRoutine);
 
-        playerHpTextRoutine = StartCoroutine(SmoothHPTextChange(playerHPText, m_OldPlayerHP, playerHP));
-        enemyHpTextRoutine = StartCoroutine(SmoothHPTextChange(enemyHPText, m_OldEnemyHP, enemyHP));
+        playerHpTextRoutine = StartCoroutine(SmoothHPTextChange(playerHPText, m_OldPlayerHP, playerHP, totalDuration));
+        enemyHpTextRoutine = StartCoroutine(SmoothHPTextChange(enemyHPText, m_OldEnemyHP, enemyHP, totalDuration));
 
         // HP(バー)を徐々に変化
         if (playerHpBarRoutine != null) StopCoroutine(playerHpBarRoutine);
         if (enemyHpBarRoutine != null) StopCoroutine(enemyHpBarRoutine);
 
-        playerHpBarRoutine = StartCoroutine(SmoothHPChangeSegmented(playerHPBar, playerHPBarBackGround, playerHP, m_OldPlayerHP));
-        enemyHpBarRoutine = StartCoroutine(SmoothHPChangeSegmented(enemyHPBar, enemyHPBarBackGround, enemyHP, m_OldEnemyHP));
+        playerHpBarRoutine = StartCoroutine(SmoothHPChangeSegmented(playerHPBar, playerHPBarBackGround, playerHP, m_OldPlayerHP, totalDuration));
+        enemyHpBarRoutine = StartCoroutine(SmoothHPChangeSegmented(enemyHPBar, enemyHPBarBackGround, enemyHP, m_OldEnemyHP, totalDuration));
 
         m_OldPlayerHP = playerHP;
         m_OldEnemyHP = enemyHP;
@@ -106,17 +106,16 @@ public class BattleUIManager : MonoBehaviour
     /// <summary>
     /// HP(数値)を滑らかに変化させる
     /// </summary>
-    private IEnumerator SmoothHPTextChange(TMPro.TextMeshProUGUI text, int fromHP, int toHP)
+    private IEnumerator SmoothHPTextChange(TMPro.TextMeshProUGUI text, int fromHP, int toHP, float totalDuration)
     {
         if (text == null) yield break;
 
-        float duration = 0.5f; // 数値変化の速度（調整可能）
         float elapsed = 0f;
 
-        while (elapsed < duration)
+        while (elapsed < totalDuration)
         {
             elapsed += Time.deltaTime;
-            float t = Mathf.Clamp01(elapsed / duration);
+            float t = Mathf.Clamp01(elapsed / totalDuration);
             int current = Mathf.RoundToInt(Mathf.Lerp(fromHP, toHP, t));
             text.text = $"{current}";
             yield return null;
@@ -126,7 +125,7 @@ public class BattleUIManager : MonoBehaviour
         text.text = $"{toHP}";
     }
 
-    private IEnumerator SmoothHPChangeSegmented(Slider bar, GameObject background, int toHP, int fromHP)
+    private IEnumerator SmoothHPChangeSegmented(Slider bar, GameObject background, int toHP, int fromHP, float totalDuration)
     {
         if (bar == null || fromHP == toHP)
         {
@@ -137,8 +136,6 @@ public class BattleUIManager : MonoBehaviour
             yield break;
         }
 
-        // 総アニメ時間は常に 0.8秒
-        const float totalDuration = 0.5f;
         int totalDelta = Mathf.Abs(toHP - fromHP);
 
         // 現在の見た目値（途中で割り込まれた時の連続性を保つため）
@@ -338,8 +335,8 @@ public class BattleUIManager : MonoBehaviour
             var txt1 = btn1.GetComponentInChildren<TextMeshProUGUI>();
             var txt2 = btn2.GetComponentInChildren<TextMeshProUGUI>();
 
-            txt1.text = monster.skills[0].skillName;
-            txt2.text = monster.skills[1].skillName;
+            txt1.text = SkillDatabase.Get(monster.skills[0]).skillName;
+            txt2.text = SkillDatabase.Get(monster.skills[1]).skillName;
 
             // 登録
             buttonsByUser[i] = new List<Button> { btn1, btn2 };
