@@ -98,7 +98,7 @@ public class MonsterAction_Chest : MonsterActionBase
     {
         // 攻撃エフェクトを呼び出す
         Vector3 effectPos = currentTargets[0].transform.position + Vector3.up * 1f;
-        EffectManager.Instance.PlayEffect(skill1Effect, effectPos);
+        EffectManager.Instance.PlayEffectByID(skill1Effect, effectPos);
         Debug.Log("OnAttackHit");
     }
 

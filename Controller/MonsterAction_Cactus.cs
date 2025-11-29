@@ -6,11 +6,11 @@ using DG.Tweening;
 public class MonsterAction_Cactus : MonsterActionBase
 {
     [Header("演出設定")]
-    public float moveSpeed = 0.5f;    // 移動速度
-    public float stopOffset = 1.2f;
+    public float moveDuration = 0.5f;    // 移動速度
     public float jumpHeight = 2.5f;
     public float jumpDuration = 0.4f;
-    public float diveDuration = 0.25f;   // 急降下時間
+    public float spinDuration = 3f;
+    public float diveDuration = 1f;   // 急降下時間
     public float slideDistance = 1.2f;
     public float slideDuration = 0.3f;
 
@@ -20,21 +20,27 @@ public class MonsterAction_Cactus : MonsterActionBase
     public SoundEffectID jumpSE;
 
     [Header("エフェクト")]
-    public EffectID skill1Effect;
+    public EffectID needleEffect;
+    public EffectID healEffect;
 
+    private Animator anim;
+    private MonsterController selfController;
     private List<MonsterController> currentTargets = new();
-    private SkillData currentSkill;
+
+    private Sequence needleDanceSeq;
+    private Vector3 needleEnd;  // 着地位置
+    private int spinCount = 0;
 
     public override IEnumerator Execute(MonsterController self, List<MonsterController> targets, SkillData skill)
     {
         currentTargets = targets;
-        currentSkill = skill;
+        selfController = self;
 
         switch (skill.skillID)
         {
             /* ニードルダンス */
             case SkillID.SKILL_ID_TOUSAND_NEEDLE:
-                yield return StartCoroutine(Execute_Skill1(self, targets));
+                yield return StartCoroutine(Execute_NeedleDance(self, targets));
                 break;
             /* サボテンジュース */
             case SkillID.SKILL_ID_ENERGY_CACTUS:
@@ -48,13 +54,13 @@ public class MonsterAction_Cactus : MonsterActionBase
         }
     }
 
-    private IEnumerator Execute_Skill1(MonsterController self, List<MonsterController> targets)
+    private IEnumerator Execute_NeedleDance(MonsterController self, List<MonsterController> targets)
     {
-        var anim = self.GetComponent<Animator>();
+        anim = self.GetComponent<Animator>();
         Vector3 start = self.transform.position;
-        Vector3 end = targets[0].transform.position + (self.isPlayer ? Vector3.back : Vector3.forward) * stopOffset;
+        Vector3 end = Vector3.zero;
         Quaternion startRot = self.transform.rotation;
-        Debug.Log($"突き刺す！");
+        spinCount = 0;
 
         // ? ターゲット方向を向く
         Vector3 dir = (end - start).normalized;
@@ -62,21 +68,87 @@ public class MonsterAction_Cactus : MonsterActionBase
         Quaternion lookRot = Quaternion.LookRotation(dir);
         self.transform.rotation = lookRot;
 
-        // 前進
-        anim.SetBool("IsMove", true);
-        Debug.Log($"IsMove");
-        float t = 0f;
-        while (t < 1f)
-        {
-            t += Time.deltaTime * moveSpeed;
-            self.transform.position = Vector3.Lerp(start, end, t);
-            yield return null;
-        }
+        // 真ん中まで前進
+        anim.SetBool("DoMove", true);
+        self.transform.DOMove(end, moveDuration);
         self.transform.rotation = startRot;
-        anim.SetBool("IsMove", false);
+        yield return null;
+    }
 
-        // 攻撃
-        anim.SetTrigger("DoAttack");
+    /// <summary>
+    /// ニードルダンスのジャンプ開始（アニメーションイベントから呼ばれる）
+    /// </summary>
+    public void OnNeedleDanceJump()
+    {
+        Debug.Log("OnNeedleDanceJump");
+
+        if (selfController == null || anim == null || currentTargets == null || currentTargets.Count == 0)
+        {
+            Debug.LogWarning("OnNeedleDanceJump: state not initialized.");
+            return;
+        }
+
+        // 既存のシーケンスがあれば殺す
+        if (needleDanceSeq != null && needleDanceSeq.IsActive())
+        {
+            needleDanceSeq.Kill();
+        }
+
+        var self = selfController;
+        Vector3 startPos = self.transform.position;
+
+        needleDanceSeq = DOTween.Sequence();
+
+        // =============================
+        // ジャンプ頂点
+        // =============================
+        Vector3 jumpApex = startPos
+                            + (self.isPlayer ? Vector3.forward : Vector3.back) * 3f
+                            + Vector3.up * jumpHeight;
+
+        // カメラ切り替え
+        needleDanceSeq.AppendCallback(() =>
+        {
+            CameraManager.Instance.SwitchToFixed8_13Camera(currentTargets[0].transform, !self.isPlayer);
+            anim.SetTrigger("DoJump");
+        });
+
+        // 上昇
+        needleDanceSeq.Append(self.transform.DOMove(jumpApex, jumpDuration)
+            .SetEase(Ease.OutQuad));
+
+        needleDanceSeq.OnComplete(() =>
+        {
+            anim.SetBool("IsNeedleSpin", true);
+        });
+    }
+
+    /// <summary>
+    /// 攻撃をする瞬間（アニメーションイベントで呼ばれる）
+    /// </summary>
+    public void OnNeedleDanceSpin()
+    {
+        // 攻撃エフェクトを呼び出す
+        Vector3 effectPos = selfController.transform.position + Vector3.forward * 1f;
+        float rot = selfController.isPlayer ? 0f : 180f;
+        EffectManager.Instance.PlayEffectByID(needleEffect, effectPos, Quaternion.Euler(20f, rot, 180f), 0.3f);
+        AudioManager.Instance.PlayActionSE(SoundEffectID.SOUND_EFFECT_ID_ANIME_CUT);
+        selfController.OnAttackHit();
+        spinCount++;
+        if (spinCount > 9) {
+            anim.SetBool("IsNeedleSpin", false);
+            spinCount = 0;
+        }
+        Debug.Log("OnNeedleDanceSpin");
+    }
+
+    /// <summary>
+    /// 攻撃をする瞬間（アニメーションイベントで呼ばれる）
+    /// </summary>
+    public void OnNeedleDanceFall()
+    {
+        selfController.transform.DOMove(needleEnd, diveDuration);
+        Debug.Log("OnNeedleDanceFall");
     }
 
     /// <summary>
@@ -103,9 +175,9 @@ public class MonsterAction_Cactus : MonsterActionBase
     public void OnAttackHit_Skill1()
     {
         // 攻撃エフェクトを呼び出す
-        Vector3 effectPos = currentTargets[0].transform.position + Vector3.up * 1f;
-        EffectManager.Instance.PlayEffect(skill1Effect, effectPos);
-        Debug.Log("OnAttackHit");
+        // Vector3 effectPos = selfController.transform.position + Vector3.up * 1f;
+        // EffectManager.Instance.PlayEffectByID(needleEffect, effectPos);
+        // Debug.Log("OnAttackHit");
     }
 
 
@@ -113,14 +185,24 @@ public class MonsterAction_Cactus : MonsterActionBase
     {
         var anim = self.GetComponent<Animator>();
 
-        // 前進
-        anim.SetBool("IsMove", true);
-        yield return MoveToTarget(self, targets[0]);
-        anim.SetBool("IsMove", false);
+        yield return null;
 
         // 攻撃
-        anim.SetTrigger("DoAttack");
-
-        self.OnAttackEnd();
+        anim.SetTrigger("DoHeal");
+        // 攻撃エフェクトを呼び出す
+        Vector3 effectPos = self.transform.position;
+        EffectManager.Instance.PlayEffectByID(healEffect, effectPos, Quaternion.Euler(0f, 0f, 0f), 2.0f);
     }
+
+    /// <summary>
+    /// 攻撃が当たる瞬間（アニメーションイベントで呼ばれる）
+    /// </summary>
+    public void OnAction_Heal()
+    {
+        // 攻撃エフェクトを呼び出す
+        Vector3 effectPos = selfController.transform.position;
+        EffectManager.Instance.PlayEffectByID(healEffect, effectPos, Quaternion.Euler(0f, 0f, 0f), 1.0f);
+        Debug.Log("OnAction_Heal");
+    }
+
 }

@@ -41,7 +41,7 @@ public class EffectManager : MonoBehaviour
     /// <summary>
     /// 指定タイプのエフェクトを生成
     /// </summary>
-    public GameObject PlayEffect(EffectID effectID, Vector3 position, Quaternion? rotation = null, float lifeTime = 2.5f)
+    public GameObject PlayEffectByID(EffectID effectID, Vector3 position, Quaternion? rotation = null, float lifeTime = 2.5f)
     {
         if (!effectDict.TryGetValue(effectID, out var data))
         {
