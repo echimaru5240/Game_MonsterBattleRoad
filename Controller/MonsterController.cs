@@ -23,7 +23,7 @@ public class MonsterController : MonoBehaviour
     // モンスターごとの行動スクリプト（動的に追加される）
     private MonsterActionBase actionBehavior;
 
-
+    private List<BattleCalculator.ActionResult> currentActionResults = new();
     private SkillData currentSkill;
     private List<MonsterController> currentTargets = new();
 
@@ -76,6 +76,7 @@ public class MonsterController : MonoBehaviour
         currentSkill = skill;
         currentTargets = targets;
 
+        currentActionResults = BattleCalculator.PrecalculateActionResults(this, skill, targets);
         yield return StartCoroutine(actionBehavior.Execute(this, targets, skill));
 
         while (!attackEnded) yield return null;
@@ -108,6 +109,7 @@ public class MonsterController : MonoBehaviour
         if (animator != null)
         {
             // 吹き飛び演出
+            animator.SetTrigger("DoLastHit");
             StartCoroutine(Knockback());
         }
     }
@@ -124,7 +126,6 @@ public class MonsterController : MonoBehaviour
         Vector3 end = start + (isPlayer ? Vector3.back : Vector3.forward)  * power;
 
         float t = 0f;
-        animator.SetTrigger("DoLastHit");
         while (t < 1f)
         {
             t += Time.deltaTime / duration;
@@ -183,7 +184,7 @@ public class MonsterController : MonoBehaviour
     /// </summary>
     public void OnAttackLastHit()
     {
-        BattleCalculator.OnAttackHit(this, currentSkill, currentTargets);
+        BattleCalculator.ApplyActionResults(currentActionResults);
         foreach (var target in currentTargets)
         {
             target.PlayLastHit(); // ← 自分を渡すことで方向が決まる

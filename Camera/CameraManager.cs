@@ -24,9 +24,11 @@ public class CameraManager : MonoBehaviour
     public CinemachineCamera playerActionCameraFront;
     public CinemachineCamera playerActionCameraBack;
     public CinemachineCamera FixCamera_m2_13;
+    public CinemachineCamera FixCamera_m8_13;
     public CinemachineCamera enemyActionCameraFront;
     public CinemachineCamera enemyActionCameraBack;
     public CinemachineCamera FixCamera_m2_m13;
+    public CinemachineCamera FixCamera_m8_m13;
 
 
     [Tooltip("ÉäÉUÉãÉgâÊñ ÇâfÇ∑ÉJÉÅÉâ")]
@@ -177,6 +179,13 @@ public class CameraManager : MonoBehaviour
         SetCameraInstant(actionCamera);
     }
 
+    public void SwitchToFixed8_13Camera(Transform newTarget, bool isPlayer)
+    {
+        CinemachineCamera actionCamera = isPlayer ? FixCamera_m8_13 : FixCamera_m8_m13;
+        actionCamera.Target.TrackingTarget = newTarget;
+        actionCamera.Target.LookAtTarget = newTarget;
+        SetCameraInstant(actionCamera);
+    }
 
     // ==============================
     // ì‡ïîCinemachineê›íË
@@ -239,9 +248,11 @@ public class CameraManager : MonoBehaviour
         playerActionCameraFront.Priority = 0;
         playerActionCameraBack.Priority = 0;
         FixCamera_m2_13.Priority = 0;
+        FixCamera_m8_13.Priority = 0;
         enemyActionCameraFront.Priority = 0;
         enemyActionCameraBack.Priority = 0;
         FixCamera_m2_m13.Priority = 0;
+        FixCamera_m8_m13.Priority = 0;
         resultCamera.Priority = 0;
         cam.Priority = 20;
 

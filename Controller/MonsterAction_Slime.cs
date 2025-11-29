@@ -23,12 +23,10 @@ public class MonsterAction_Slime : MonsterActionBase
     public EffectID skill1Effect;
 
     private List<MonsterController> currentTargets = new();
-    private SkillData currentSkill;
 
     public override IEnumerator Execute(MonsterController self, List<MonsterController> targets, SkillData skill)
     {
         currentTargets = targets;
-        currentSkill = skill;
 
         switch (skill.skillID)
         {
@@ -165,7 +163,7 @@ public class MonsterAction_Slime : MonsterActionBase
     {
         // 攻撃エフェクトを呼び出す
         Vector3 effectPos = currentTargets[0].transform.position + Vector3.up * 1f;
-        EffectManager.Instance.PlayEffect(skill1Effect, effectPos);
+        EffectManager.Instance.PlayEffectByID(skill1Effect, effectPos, Quaternion.Euler(-90f, 0, 0));
         Debug.Log("OnAttackHit");
     }
 

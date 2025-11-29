@@ -222,13 +222,21 @@ public class BattleManager : MonoBehaviour
         foreach (var enemy in enemyControllers)
         {
             Vector3 effectPos = enemy.transform.position + Vector3.up * 1f;
-            EffectManager.Instance.PlayEffect(EffectID.EFFECT_ID_EXPLOSION_SMALL, effectPos);
+            EffectManager.Instance.PlayEffectByID(EffectID.EFFECT_ID_EXPLOSION_SMALL, effectPos);
             enemy.PlayLastHit();
         }
         int dmg = BattleCalculator.CalculateFinisherDamage(finisherCard);
 
-        foreach (var enemy in enemyControllers)
-            ShowDamagePopup(dmg / enemyControllers.Count, enemy, false);
+
+        foreach (var enemy in enemyControllers) {
+            var result = new BattleCalculator.ActionResult
+            {
+                Target = enemy,
+                Value = dmg / enemyControllers.Count,
+                IsDamage = true
+            };
+            ShowDamagePopup(result);
+        }
 
         EnemyCurrentHP = Mathf.Max(0, EnemyCurrentHP - dmg);
 
@@ -318,7 +326,6 @@ public class BattleManager : MonoBehaviour
                 SetMonsterPositionForAttack(attacker, targets, skill.targetType);
                 // 攻撃コルーチン実行
                 yield return StartCoroutine(attacker.PerformAction(targets, skill));
-                if (isPlayer) AddCourage(20);
                 break;
 
             case SkillAction.HEAL:
@@ -333,7 +340,6 @@ public class BattleManager : MonoBehaviour
                 }
                 // 攻撃コルーチン実行
                 yield return StartCoroutine(attacker.PerformAction(targets, skill));
-                if (isPlayer) AddCourage(20);
                 break;
 
             case SkillAction.SPECIAL:
@@ -344,6 +350,7 @@ public class BattleManager : MonoBehaviour
 
         battleUIManager.HideAttackText(isPlayer);
         UpdateHPBars();
+        if (isPlayer) AddCourage(10);
 
         // モンスターの位置を戻す
         SetMonsterPositionForWaitinig();
@@ -465,8 +472,8 @@ public class BattleManager : MonoBehaviour
         battleUIManager.UpdateHP(PlayerCurrentHP, EnemyCurrentHP);
     }
 
-    private void ShowDamagePopup(int value, MonsterController target, bool isHeal = false)
+    private void ShowDamagePopup(BattleCalculator.ActionResult result)
     {
-        battleUIManager.ShowDamagePopup(value, target, isHeal);
+        battleUIManager.ShowDamagePopup(result);
     }
 }

@@ -453,15 +453,15 @@ public class BattleUIManager : MonoBehaviour
     // ================================
     // ダメージポップアップ
     // ================================
-    public void ShowDamagePopup(int value, MonsterController target, bool isHeal = false)
+    public void ShowDamagePopup(BattleCalculator.ActionResult result)
     {
-        Vector3 worldPos = target.transform.position + Vector3.up * 2f;
+        Vector3 worldPos = result.Target.transform.position + Vector3.up * 2f;
         GameObject popup = Instantiate(damageTextPrefab, canvasTransform);
         popup.transform.position = Camera.main.WorldToScreenPoint(worldPos);
 
         var dmgText = popup.GetComponent<DamageText>().textMesh;
-        dmgText.text = value.ToString();
-        dmgText.color = isHeal ? Color.green : Color.red;
+        dmgText.text = result.Value.ToString();
+        dmgText.color = result.IsDamage ? Color.red : Color.green;
     }
 
     // ================================
