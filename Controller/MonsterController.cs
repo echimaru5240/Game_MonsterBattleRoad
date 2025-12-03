@@ -12,10 +12,10 @@ public class MonsterController : MonoBehaviour
     public string name;
     public Sprite sprite;
     public int hp;
-    public int attack;
-    public int magicPower; // 魔法や回復用
-    public int defense;
-    public int speed;
+    public int atk;
+    public int mgc; // 魔法や回復用
+    public int def;
+    public int agi;
 
     [Header("行動関連")]
     public List<SkillID> skills = new();
@@ -32,24 +32,27 @@ public class MonsterController : MonoBehaviour
     private Quaternion initialRotation;
 
     // 攻撃完了を待つフラグ
-    private bool attackEnded = false;
+    private bool fAttackEnd = false;
+
+    // 回避モーション済みかのフラグ
+    private bool fDodge = false;
 
     /// <summary>
     /// 初期化
     /// </summary>
-    public void InitializeFromCard(MonsterCard card, bool isPlayer)
+    public void InitializeFromData(MonsterBattleData monster, bool isPlayer)
     {
         this.isPlayer = isPlayer;
-        name = card.cardName;
-        sprite = card.monsterSprite;
+        name = monster.Name;
+        sprite = monster.monsterNearSprite;
 
-        hp = card.hp;
-        attack = card.attack;
-        magicPower = card.magicPower;
-        defense = card.defense;
-        speed = card.speed;
+        hp = monster.hp;
+        atk = monster.atk;
+        mgc = monster.mgc;
+        def = monster.def;
+        agi = monster.agi;
 
-        skills = new List<SkillID>(card.skills);
+        skills = new List<SkillID>(monster.skills);
 
         animator = GetComponent<Animator>();
 
@@ -71,15 +74,16 @@ public class MonsterController : MonoBehaviour
         if (actionBehavior == null || targets == null || targets.Count == 0)
             yield break;
 
-        attackEnded = false;
+        fAttackEnd = false;
+        fDodge = false;
 
         currentSkill = skill;
         currentTargets = targets;
 
         currentActionResults = BattleCalculator.PrecalculateActionResults(this, skill, targets);
-        yield return StartCoroutine(actionBehavior.Execute(this, targets, skill));
+        yield return StartCoroutine(actionBehavior.Execute(this, currentActionResults, skill));
 
-        while (!attackEnded) yield return null;
+        while (!fAttackEnd) yield return null;
         yield return new WaitForSeconds(1.5f);
     }
 
@@ -93,31 +97,50 @@ public class MonsterController : MonoBehaviour
     /// <summary>
     /// 被弾アニメーション＋カメラ演出
     /// </summary>
-    public void PlayHit()
+    private void PlayHit(BattleCalculator.ActionResult result)
     {
-        if (animator != null)
-        {
-            animator.SetTrigger("DoHit");
+        if (result.IsMiss && !fDodge) {
+            StartCoroutine(Knockback());
+            fDodge = true;
+        }
+        else {
+            if (animator != null)
+            {
+                animator.SetTrigger("DoHit");
+            }
         }
     }
 
     /// <summary>
     /// 被弾アニメーション＋カメラ演出
     /// </summary>
-    public void PlayLastHit()
+    private void PlayLastHit(BattleCalculator.ActionResult result)
     {
-        if (animator != null)
-        {
-            // 吹き飛び演出
-            animator.SetTrigger("DoLastHit");
-            StartCoroutine(Knockback());
+        if (result.IsDamage) {
+            if (!result.IsMiss) {
+                if (result.IsCritical) AudioManager.Instance.PlayCriticalSE();
+                if (animator != null)
+                {
+                    // 吹き飛び演出
+                    animator.SetTrigger("DoLastHit");
+                    StartCoroutine(Knockback());
+                }
+            }
+            else {
+                if (!fDodge) {
+                    StartCoroutine(Knockback());
+                }
+            }
+        }
+        else {
+
         }
     }
 
     /// <summary>
     /// 攻撃を受けた時に吹き飛ぶ演出
     /// </summary>
-    public IEnumerator Knockback(float power = 3f, float duration = 0.3f)
+    private IEnumerator Knockback(float power = 3f, float duration = 0.3f)
     {
         Vector3 start = transform.position;
 
@@ -172,9 +195,9 @@ public class MonsterController : MonoBehaviour
     /// </summary>
     public void OnAttackHit()
     {
-        foreach (var target in currentTargets)
+        foreach (var result in currentActionResults)
         {
-            target.PlayHit(); // ← 自分を渡すことで方向が決まる
+            result.Target.PlayHit(result); // ← 自分を渡すことで方向が決まる
         }
         Debug.Log("OnAttackHit");
     }
@@ -185,9 +208,9 @@ public class MonsterController : MonoBehaviour
     public void OnAttackLastHit()
     {
         BattleCalculator.ApplyActionResults(currentActionResults);
-        foreach (var target in currentTargets)
+        foreach (var result in currentActionResults)
         {
-            target.PlayLastHit(); // ← 自分を渡すことで方向が決まる
+            result.Target.PlayLastHit(result); // ← 自分を渡すことで方向が決まる
         }
         Debug.Log("OnAttackLastHit");
     }
@@ -198,7 +221,7 @@ public class MonsterController : MonoBehaviour
     /// </summary>
     public void OnAttackEnd()
     {
-        attackEnded = true; // ← フラグONでPerformActionが再開
+        fAttackEnd = true; // ← フラグONでPerformActionが再開
         Debug.Log("OnAttackEnd");
     }
 }

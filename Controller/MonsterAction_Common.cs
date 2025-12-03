@@ -6,13 +6,13 @@ public class MonsterAction_Common : MonsterActionBase
 {
     public float moveSpeed = 0.5f;
 
-    public override IEnumerator Execute(MonsterController self, List<MonsterController> targets, SkillData skill)
+    public override IEnumerator Execute(MonsterController self, List<BattleCalculator.ActionResult> results, SkillData skill)
     {
         var anim = self.GetComponent<Animator>();
 
         // ëOêi
         anim.SetBool("IsMove", true);
-        yield return MoveToTarget(self, targets[0], moveSpeed);
+        yield return MoveToTarget(self, results[0].Target, moveSpeed);
         anim.SetBool("IsMove", false);
 
         // çUåÇ

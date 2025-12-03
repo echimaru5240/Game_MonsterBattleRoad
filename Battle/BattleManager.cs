@@ -77,7 +77,7 @@ public class BattleManager : MonoBehaviour
     // ================================
     // セットアップ
     // ================================
-    public IEnumerator SetupBattle(MonsterCard[] playerCards, BattleStageData stage, System.Action<bool, int> onEnd, int initialCourage)
+    public IEnumerator SetupBattle(MonsterBattleData[] playerMonsters, BattleStageData stage, System.Action<bool, int> onEnd, int initialCourage)
     {
         battleUIPanel.SetActive(true);
         resultUIPanel.SetActive(false);
@@ -87,8 +87,30 @@ public class BattleManager : MonoBehaviour
         AudioManager.Instance.PlayBGM(stage.bgm);
 
         // モンスター配置設定
+        MonsterBattleData[] enemyBattleData = new MonsterBattleData[0];;
+        if (stage.enemyTeam == null)
+        {
+            Debug.LogWarning("enemyTeam が null です");
+            enemyBattleData = new MonsterBattleData[0];
+        }
+        else
+        {
+            enemyBattleData = new MonsterBattleData[stage.enemyTeam.Length];
+
+            for (int i = 0; i < stage.enemyTeam.Length; i++)
+            {
+                var enemy = stage.enemyTeam[i];
+                if (enemy == null)
+                {
+                    enemyBattleData[i] = null; // 空スロット
+                    continue;
+                }
+
+                enemyBattleData[i] = MonsterBattleData.CreateBattleFromMasterData(enemy);
+            }
+        }
         spawner.SetSpawnAreaPositions(stage.isBossStage);
-        spawner.Spawn(playerCards, stage.enemyTeam);
+        spawner.Spawn(playerMonsters, enemyBattleData);
 
         // Controllerベースに移行
         playerControllers = spawner.PlayerControllers;
@@ -104,7 +126,7 @@ public class BattleManager : MonoBehaviour
         battleUIManager.OnBattleEnd = OnBattleEnd;
 
 
-        selectedByUser = new int[playerCards.Length];
+        selectedByUser = new int[playerMonsters.Length];
         for (int i = 0; i < selectedByUser.Length; i++) selectedByUser[i] = -1;
         playerActions.Clear();
         ResetSelections();
@@ -223,7 +245,7 @@ public class BattleManager : MonoBehaviour
         {
             Vector3 effectPos = enemy.transform.position + Vector3.up * 1f;
             EffectManager.Instance.PlayEffectByID(EffectID.EFFECT_ID_EXPLOSION_SMALL, effectPos);
-            enemy.PlayLastHit();
+            // enemy.PlayLastHit();
         }
         int dmg = BattleCalculator.CalculateFinisherDamage(finisherCard);
 
@@ -267,7 +289,7 @@ public class BattleManager : MonoBehaviour
         // プレイヤー行動（フィニッシャー後は空）
         foreach (var action in playerActions)
         {
-            int priority = action.user.speed + Random.Range(0, action.user.speed / 2);
+            int priority = action.user.agi + Random.Range(0, action.user.agi / 2);
             turnActions.Add(new ActionData(action.user, action.skill, true, priority));
         }
 
@@ -275,7 +297,7 @@ public class BattleManager : MonoBehaviour
         foreach (var enemy in enemyControllers)
         {
             var skill = SkillDatabase.Get(enemy.skills[Random.Range(0, enemy.skills.Count)]);
-            int priority = enemy.speed + Random.Range(0, enemy.speed / 2);
+            int priority = enemy.agi + Random.Range(0, enemy.agi / 2);
             turnActions.Add(new ActionData(enemy, skill, false, priority));
         }
 

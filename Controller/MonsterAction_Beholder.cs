@@ -3,7 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using DG.Tweening;
 
-public class MonsterAction_Turtle : MonsterActionBase
+public class MonsterAction_Beholder : MonsterActionBase
 {
     [Header("スライム演出設定")]
     public float moveDuration = 0.3f;    // 1回のジグザグ時間
@@ -40,8 +40,8 @@ public class MonsterAction_Turtle : MonsterActionBase
         switch (skill.skillID)
         {
             /* ローリングスパイク */
-            case SkillID.SKILL_ID_SPIKE_ROLLING:
-                yield return StartCoroutine(Execute_SpikeRolling());
+            case SkillID.SKILL_ID_PSYCO_LASER:
+                yield return StartCoroutine(Execute_Beam());
                 break;
             /* ファイアバースト */
             case SkillID.SKILL_ID_FIRE_BURST:
@@ -55,7 +55,7 @@ public class MonsterAction_Turtle : MonsterActionBase
         }
     }
 
-    private IEnumerator Execute_SpikeRolling()
+    private IEnumerator Execute_Beam()
     {
         var anim = selfController.GetComponent<Animator>();
         if (currentActionResults == null || currentActionResults.Count == 0)
@@ -77,9 +77,13 @@ public class MonsterAction_Turtle : MonsterActionBase
         }
         CameraManager.Instance.SwitchToFixedBackCamera(target.transform, selfController.isPlayer);
         // 3. 頭上にファイアーボール生成
-        Vector3 spawnPos = selfController.transform.position + Vector3.forward * 6f + Vector3.up * 1f;
-        EffectManager.Instance.PlayEffectByID(beamEffect, spawnPos, Quaternion.Euler(0f, 0f, 0f));
+        anim.SetBool("IsBeam", true);
+        Vector3 spawnPos = selfController.transform.position
+                            + (selfController.isPlayer ? Vector3.forward * 6f : Vector3.forward * -6f)
+                            + Vector3.up * 1f;
+        EffectManager.Instance.PlayEffectByID(beamEffect, spawnPos, Quaternion.Euler(selfController.isPlayer ? 0f : 180f, 0f, 0f));
         yield return new WaitForSeconds(2.5f);
+        anim.SetBool("IsBeam", false);
         selfController.OnAttackLastHit();
         selfController.OnAttackEnd();
     }

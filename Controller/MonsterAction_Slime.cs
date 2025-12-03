@@ -15,50 +15,52 @@ public class MonsterAction_Slime : MonsterActionBase
     public float slideDuration = 0.3f;
 
     [Header("モーションSE")]
-    public SoundEffectID moveSE;
-    public SoundEffectID attackSE;
-    public SoundEffectID jumpSE;
+    public AudioClip moveSE;
+    public AudioClip attackSE;
+    public AudioClip jumpSE;
 
     [Header("エフェクト")]
     public EffectID skill1Effect;
 
-    private List<MonsterController> currentTargets = new();
+    private MonsterController selfController;
+    private List<BattleCalculator.ActionResult> currentActionResults = new();
 
-    public override IEnumerator Execute(MonsterController self, List<MonsterController> targets, SkillData skill)
+    public override IEnumerator Execute(MonsterController self, List<BattleCalculator.ActionResult> results, SkillData skill)
     {
-        currentTargets = targets;
+        selfController = self;
+        currentActionResults = results;
 
         switch (skill.skillID)
         {
             /* プルプルアタック */
             case SkillID.SKILL_ID_SLIME_STRIKE:
-                yield return StartCoroutine(Execute_Skill1(self, targets));
+                yield return StartCoroutine(Execute_Skill1());
                 break;
             /* マジックショット */
             case SkillID.SKILL_ID_FIRE_BURST:
-                yield return StartCoroutine(Execute_Skill2(self, targets));
+                yield return StartCoroutine(Execute_Skill2());
                 break;
             default:
-                Debug.LogWarning($"{self.name} のスキル「{skill.skillName}」は未実装です。");
-                yield return StartCoroutine(Execute_Skill2(self, targets));
+                Debug.LogWarning($"{selfController.name} のスキル「{skill.skillName}」は未実装です。");
+                yield return StartCoroutine(Execute_Skill2());
                 break;
                 // yield break;
         }
     }
 
-    private IEnumerator Execute_Skill1(MonsterController self, List<MonsterController> targets)
+    private IEnumerator Execute_Skill1()
     {
-        var anim = self.GetComponent<Animator>();
-        Vector3 startPos = self.transform.position;
+        var anim = selfController.GetComponent<Animator>();
+        Vector3 startPos = selfController.transform.position;
         Vector3 centerPos = Vector3.zero;
-        MonsterController target = targets[0];
+        MonsterController target = currentActionResults[0].Target;
 
         Sequence seq = DOTween.Sequence();
 
         // =============================
         // ? 3回ジグザグ
         // =============================
-        CameraManager.Instance.SwitchToActionCameraBack(self.transform, self.isPlayer);
+        CameraManager.Instance.SwitchToActionCameraBack(selfController.transform, selfController.isPlayer);
         for (int i = 0; i < 3; i++)
         {
             Vector3 dir = new Vector3((i % 2 == 0 ? 1 : -1) * zigzagAmplitude, 0, 0);
@@ -68,19 +70,19 @@ public class MonsterAction_Slime : MonsterActionBase
                 anim.SetTrigger("DoMove");
             });
 
-            seq.Append(self.transform.DOMove(targetPos, moveDuration)
+            seq.Append(selfController.transform.DOMove(targetPos, moveDuration)
                 .SetEase(Ease.OutSine));
         }
 
         seq.AppendCallback(() => {
-            CameraManager.Instance.SwitchToFixedBackCamera(self.transform, self.isPlayer);
+            CameraManager.Instance.SwitchToFixedBackCamera(selfController.transform, selfController.isPlayer);
         });
 
         // =============================
         // ? ジャンプ（上昇→ターゲット落下）
         // =============================
-        Vector3 jumpApex = self.transform.position
-                        + (self.isPlayer ? Vector3.forward : Vector3.back) * 3
+        Vector3 jumpApex = selfController.transform.position
+                        + (selfController.isPlayer ? Vector3.forward : Vector3.back) * 3
                         + Vector3.up * jumpHeight;
 
          seq.AppendCallback(() => {
@@ -88,11 +90,11 @@ public class MonsterAction_Slime : MonsterActionBase
             });
 
         // 上昇
-        seq.Append(self.transform.DOMove(jumpApex, jumpDuration)
+        seq.Append(selfController.transform.DOMove(jumpApex, jumpDuration)
             .SetEase(Ease.OutQuad));
 
         // 落下（ターゲット位置に着地）
-        seq.Append(self.transform.DOMove(target.transform.position, diveDuration)
+        seq.Append(selfController.transform.DOMove(target.transform.position, diveDuration)
             .SetEase(Ease.InCubic)
             .OnStart(() => {
                 anim.SetTrigger("DoAttack");
@@ -107,21 +109,21 @@ public class MonsterAction_Slime : MonsterActionBase
         // =============================
         // ターゲット方向のZ軸基準で滑る
         Vector3 slideTarget = target.transform.position +
-            new Vector3(0, 0, self.isPlayer ? +slideDistance : -slideDistance);
+            new Vector3(0, 0, selfController.isPlayer ? +slideDistance : -slideDistance);
 
         // ドリフトカーブ（Ease.OutCubic）で減速しながら滑る
-        seq.Append(self.transform.DOMove(slideTarget, slideDuration)
+        seq.Append(selfController.transform.DOMove(slideTarget, slideDuration)
             .SetEase(Ease.OutCubic));
 
         // 滑りながらちょっと回転（ドリフト感）
-        seq.Join(self.transform.DORotate(new Vector3(0, self.isPlayer ? 20f : -20f, 0), slideDuration, RotateMode.LocalAxisAdd)
+        seq.Join(selfController.transform.DORotate(new Vector3(0, selfController.isPlayer ? 20f : -20f, 0), slideDuration, RotateMode.LocalAxisAdd)
             .SetEase(Ease.OutQuad));
 
         // =============================
         // ? 攻撃終了
         // =============================
         seq.OnComplete(() => {
-            self.OnAttackEnd();
+            selfController.OnAttackEnd();
         });
 
         // シーケンス終了を待機
@@ -133,7 +135,7 @@ public class MonsterAction_Slime : MonsterActionBase
     /// </summary>
     public void OnMove_Skill1()
     {
-        if (moveSE != null) AudioManager.Instance.PlayActionSE(moveSE);
+        if (moveSE != null) AudioManager.Instance.PlaySE(moveSE);
         Debug.Log("OnMove");
     }
 
@@ -142,7 +144,7 @@ public class MonsterAction_Slime : MonsterActionBase
     /// </summary>
     public void OnAttack_Skill1()
     {
-        if (attackSE != null) AudioManager.Instance.PlayActionSE(attackSE);
+        if (attackSE != null) AudioManager.Instance.PlaySE(attackSE);
         Debug.Log("OnAttack");
     }
 
@@ -151,7 +153,7 @@ public class MonsterAction_Slime : MonsterActionBase
     /// </summary>
     public void OnJump_Skill1()
     {
-        if (jumpSE != null) AudioManager.Instance.PlayActionSE(jumpSE);
+        if (jumpSE != null) AudioManager.Instance.PlaySE(jumpSE);
         Debug.Log("OnJump");
     }
 
@@ -162,24 +164,24 @@ public class MonsterAction_Slime : MonsterActionBase
     public void OnAttackHit_Skill1()
     {
         // 攻撃エフェクトを呼び出す
-        Vector3 effectPos = currentTargets[0].transform.position + Vector3.up * 1f;
+        Vector3 effectPos = currentActionResults[0].Target.transform.position + Vector3.up * 1f;
         EffectManager.Instance.PlayEffectByID(skill1Effect, effectPos, Quaternion.Euler(-90f, 0, 0));
         Debug.Log("OnAttackHit");
     }
 
 
-    public IEnumerator Execute_Skill2(MonsterController self, List<MonsterController> targets)
+    public IEnumerator Execute_Skill2()
     {
-        var anim = self.GetComponent<Animator>();
+        var anim = selfController.GetComponent<Animator>();
 
         // 前進
         anim.SetBool("IsMove", true);
-        yield return MoveToTarget(self, targets[0]);
+        yield return MoveToTarget(selfController, currentActionResults[0].Target);
         anim.SetBool("IsMove", false);
 
         // 攻撃
         anim.SetTrigger("DoAttack");
 
-        self.OnAttackEnd();
+        selfController.OnAttackEnd();
     }
 }

@@ -27,6 +27,7 @@ public class AudioManager : MonoBehaviour
     public AudioClip buttonSE;
     public AudioClip executeSkillSE;
     public AudioClip courageMaxSE;
+    public AudioClip criticalSE;
 
     [Header("ŒÂ•ÊSE“o˜^")]
     [SerializeField] private List<SoundEffectIDData> seDataList = new List<SoundEffectIDData>();
@@ -154,4 +155,5 @@ public class AudioManager : MonoBehaviour
     public void PlayButtonSE() => PlaySE(buttonSE);
     public void PlayExecuteSkillSE() => PlaySE(executeSkillSE);
     public void PlayCourageMaxSE() => PlaySE(courageMaxSE);
+    public void PlayCriticalSE() => PlaySE(criticalSE);
 }

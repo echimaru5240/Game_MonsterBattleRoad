@@ -3,7 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using DG.Tweening;
 
-public class MonsterAction_Cactus : MonsterActionBase
+public class MonsterAction_MushRoom : MonsterActionBase
 {
     [Header("演出設定")]
     public float moveDuration = 0.5f;    // 移動速度
@@ -40,12 +40,12 @@ public class MonsterAction_Cactus : MonsterActionBase
         switch (skill.skillID)
         {
             /* ニードルダンス */
-            case SkillID.SKILL_ID_TOUSAND_NEEDLE:
-                yield return StartCoroutine(Execute_NeedleDance());
+            case SkillID.SKILL_ID_MUSH_CRUSHER:
+                yield return StartCoroutine(Execute_MushCrasher());
                 break;
             /* サボテンジュース */
-            case SkillID.SKILL_ID_ENERGY_CACTUS:
-                yield return StartCoroutine(Execute_Heal());
+            case SkillID.SKILL_ID_MUSH_CRUSHER:
+                yield return StartCoroutine(Execute_MushCrasher());
                 break;
             default:
                 Debug.LogWarning($"{selfController.name} のスキル「{skill.skillName}」は未実装です。");
@@ -55,7 +55,7 @@ public class MonsterAction_Cactus : MonsterActionBase
         }
     }
 
-    private IEnumerator Execute_NeedleDance()
+    private IEnumerator Execute_MushCrasher()
     {
         anim = selfController.GetComponent<Animator>();
         Vector3 start = selfController.transform.position;
