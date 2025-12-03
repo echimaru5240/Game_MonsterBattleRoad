@@ -89,56 +89,20 @@ public static class BattleCalculator
         mgr.UpdateHPBars();
     }
 
-/*
-    public static void OnAttackHit(MonsterController attacker, SkillData skill, List<MonsterController> targets)
-    {
-        var mgr = BattleManager.Instance;
-        bool isPlayerSide = attacker.isPlayer;
-        bool isMultiTarget = targets.Count > 1;
-
-        int totalDamage = 0;
-
-        Debug.Log($"isPlayerSide={isPlayerSide}");
-
-        // ① ダメージ計算とポップアップ表示
-        foreach (var target in targets)
-        {
-            var result = CalculateAttackResult(attacker, target, skill, disableCritical: isMultiTarget);
-
-            if (!result.IsMiss)
-            {
-                mgr.battleUIManager.ShowDamagePopup(result.Value, target, false);
-                totalDamage += result.Value;
-
-                // if (!isMultiTarget && result.IsCritical)
-                    // mgr.ui.ShowMessage("クリティカルヒット！");
-            }
-            else
-            {
-                // mgr.ui.ShowMessage($"{attacker.cardData.cardName} の攻撃は外れた！");
-            }
-        }
-
-        // ② HPを一括で反映
-        if (isPlayerSide)
-            mgr.EnemyCurrentHP = Mathf.Max(0, mgr.EnemyCurrentHP - totalDamage);
-        else
-            mgr.PlayerCurrentHP = Mathf.Max(0, mgr.PlayerCurrentHP - totalDamage);
-
-        mgr.UpdateHPBars();
-    }
-*/
-
     /// <summary>
     /// 攻撃結果をまとめて返す
     /// </summary>
     public static ActionResult CalculateAttackResult(MonsterController attacker, MonsterController defender, SkillData skill, bool disableCritical = false)
     {
-        int damage = CalculateDamage(attacker, defender, skill);
-        bool isCritical = Random.value < skill.criticalRate ; // スキル側に確率を持たせる想定
-        if (isCritical)
-        {
-            damage = Mathf.RoundToInt(damage * 1.5f);
+        int damage = 0;
+        bool isCritical = Random.value < skill.criticalRate; // スキル側に確率を持たせる想定
+        bool isMiss = Random.value > skill.accuracy; // ミス判定などもここで
+        if (!isMiss) {
+            damage = CalculateDamage(attacker, defender, skill);
+            if (isCritical)
+            {
+                damage = Mathf.RoundToInt(damage * 1.5f);
+            }
         }
 
         return new ActionResult
@@ -147,7 +111,7 @@ public static class BattleCalculator
             IsDamage = true,
             Value = damage,
             IsCritical = isCritical,
-            IsMiss = Random.value > skill.accuracy // ミス判定などもここで
+            IsMiss = isMiss
         };
     }
 
@@ -173,13 +137,13 @@ public static class BattleCalculator
     // ================================
     public static int CalculateDamage(MonsterController attacker, MonsterController defender, SkillData skill)
     {
-        int attack = attacker.attack;
-        int defense = defender != null ? defender.defense : 0;
+        int atk = attacker.atk;
+        int def = defender != null ? defender.def : 0;
 
         float power = skill.power; // Skill 側で数値（100なら等倍）
 
         // 攻撃式： (攻撃力 × (倍率/100)) - (防御力の半分)
-        float baseDamage = (attack * (power / 50f)) - (defense * 0.5f);
+        float baseDamage = (atk * (power / 50f)) - (def * 0.5f);
 
         // ランダム補正 ±10%
         float randomFactor = Random.Range(0.9f, 1.1f);
@@ -193,7 +157,7 @@ public static class BattleCalculator
     // ================================
     public static int CalculateHeal(MonsterController user, SkillData skill)
     {
-        int heal = Mathf.RoundToInt(user.magicPower * (skill.power / 100f));
+        int heal = Mathf.RoundToInt(user.mgc * (skill.power / 100f));
         return Mathf.Max(1, heal);
     }
 

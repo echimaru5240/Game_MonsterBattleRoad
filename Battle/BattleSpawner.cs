@@ -15,31 +15,31 @@ public class BattleSpawner : MonoBehaviour
     // ================================
     // スポーン
     // ================================
-    public void Spawn(MonsterCard[] playerCards, MonsterCard[] enemyCards)
+    public void Spawn(MonsterBattleData[] playerMonsters, MonsterBattleData[] enemyMonsters)
     {
         Clear();
 
-        SpawnSide(playerCards, playerArea, PlayerControllers, isPlayer: true);
-        SpawnSide(enemyCards, enemyArea, EnemyControllers, isPlayer: false);
+        SpawnSide(playerMonsters, playerArea, PlayerControllers, isPlayer: true);
+        SpawnSide(enemyMonsters, enemyArea, EnemyControllers, isPlayer: false);
     }
 
-    private void SpawnSide(MonsterCard[] cards, Transform area, List<MonsterController> controllerList, bool isPlayer)
+    private void SpawnSide(MonsterBattleData[] monsters, Transform area, List<MonsterController> controllerList, bool isPlayer)
     {
-        if (cards == null || cards.Length == 0) return;
+        if (monsters == null || monsters.Length == 0) return;
 
         float spacing = 2.2f;
-        for (int i = 0; i < cards.Length; i++)
+        for (int i = 0; i < monsters.Length; i++)
         {
-            var card = cards[i];
-            if (card?.prefab == null)
+            var monster = monsters[i];
+            if (monster?.prefab == null)
             {
-                Debug.LogWarning($"カード {card?.name ?? "null"} にPrefabが設定されていません。");
+                Debug.LogWarning($"カード {monster?.Name ?? "null"} にPrefabが設定されていません。");
                 continue;
             }
 
             // 生成
-            var obj = Instantiate(card.prefab, area);
-            float offset = (i - (cards.Length - 1) / 2f) * spacing;
+            var obj = Instantiate(monster.prefab, area);
+            float offset = (i - (monsters.Length - 1) / 2f) * spacing;
             obj.transform.localPosition = new Vector3(offset, 0, 0);
 
             var ctrl = obj.GetComponent<MonsterController>();
@@ -50,7 +50,7 @@ public class BattleSpawner : MonoBehaviour
             }
 
             // MonsterCardの情報をControllerへコピー
-            ctrl.InitializeFromCard(card, isPlayer);
+            ctrl.InitializeFromData(monster, isPlayer);
             controllerList.Add(ctrl);
         }
     }

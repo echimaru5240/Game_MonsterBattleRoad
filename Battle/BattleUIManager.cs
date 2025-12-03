@@ -461,7 +461,20 @@ public class BattleUIManager : MonoBehaviour
 
         var dmgText = popup.GetComponent<DamageText>().textMesh;
         dmgText.text = result.Value.ToString();
-        dmgText.color = result.IsDamage ? Color.red : Color.green;
+        if (result.IsDamage) {
+            dmgText.color = Color.red;
+            if (result.IsMiss) {
+                dmgText.color = Color.gray;
+                dmgText.text = "Miss";
+            }
+            else if (result.IsCritical) {
+                dmgText.color = Color.yellow;
+                popup.transform.localScale = Vector3.one * 1.4f;
+            }
+        }
+        else {
+            dmgText.color = Color.green;
+        }
     }
 
     // ================================

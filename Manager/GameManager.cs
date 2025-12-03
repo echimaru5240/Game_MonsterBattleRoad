@@ -14,4 +14,10 @@ public class HomeUI : MonoBehaviour
         AudioManager.Instance.PlayButtonSE();
         SceneManager.LoadScene("BattleScene");
     }
+
+    public void OnClickPartyFormation()
+    {
+        AudioManager.Instance.PlayButtonSE();
+        SceneManager.LoadScene("PartyEditScene");
+    }
 }

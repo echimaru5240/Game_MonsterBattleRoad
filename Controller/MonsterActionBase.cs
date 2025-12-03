@@ -4,10 +4,10 @@ using System.Collections.Generic;
 
 public abstract class MonsterActionBase : MonoBehaviour
 {
-    public abstract IEnumerator Execute(MonsterController self, List<MonsterController> targets, SkillData skill);
+    public abstract IEnumerator Execute(MonsterController self, List<BattleCalculator.ActionResult> results, SkillData skill);
 
     // ã§í ÉwÉãÉpÅ[
-    protected IEnumerator MoveToTarget(MonsterController self, MonsterController target, float speed = 0.5f, float stopOffset = 1.2f)
+    protected IEnumerator MoveToTarget(MonsterController self, MonsterController target, float agi = 0.5f, float stopOffset = 1.2f)
     {
         Vector3 start = self.transform.position;
         Vector3 end = target.transform.position + (self.isPlayer ? Vector3.back : Vector3.forward) * stopOffset;
@@ -23,7 +23,7 @@ public abstract class MonsterActionBase : MonoBehaviour
         float t = 0f;
         while (t < 1f)
         {
-            t += Time.deltaTime * speed;
+            t += Time.deltaTime * agi;
             self.transform.position = Vector3.Lerp(start, end, t);
             yield return null;
         }

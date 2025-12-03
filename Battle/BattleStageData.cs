@@ -12,7 +12,7 @@ public enum BattleStageType
 public class BattleStageData : ScriptableObject
 {
     [Header("敵チーム構成")]
-    public MonsterCard[] enemyTeam;
+    public MonsterData[] enemyTeam;
 
     [Header("ステージ演出")]
     public string stageName;   // 例: 「初戦」「決勝戦」「魔王戦」
