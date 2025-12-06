@@ -9,6 +9,9 @@ public class GameContext : MonoBehaviour
     // 初期配布モンスター（インスペクタで MonsterData を入れておく）
     [SerializeField] private MonsterData[] initialMonsterData;
 
+    public PartyData[] partyList { get; private set; } = new PartyData[3];
+    public int CurrentPartyIndex { get; set; } = 0;  // 今表示中
+
     // 今回は3体想定
     public OwnedMonster[] party { get; private set; } = new OwnedMonster[3];
 
@@ -57,10 +60,10 @@ public class GameContext : MonoBehaviour
         {
             foreach (var master in initialMonsterData)
             {
-                if (master == null) continue;
-                var owned = OwnedMonsterFactory.CreateFromMaster(master);
-                inventory.ownedMonsters.Add(owned);
-                Debug.Log($"モンスターを追加しました。{owned.Name}");
+                // if (master == null) continue;
+                // var owned = OwnedMonsterFactory.CreateFromMaster(master);
+                // inventory.ownedMonsters.Add(owned);
+                AddMonsterToInventory(master);
             }
         }
         else{
@@ -82,6 +85,14 @@ public class GameContext : MonoBehaviour
             }
         }
 
+        partyList = new PartyData[3];
+        for (int i = 0; i < partyList.Length; i++)
+        {
+            partyList[i] = new PartyData();
+            partyList[i].partyName = $"パーティ{i+1}";
+            partyList[i].members = (i == 0) ? party : new OwnedMonster[3];
+        }
+
         // 初期化フラグを立てて保存
         PlayerPrefs.SetInt(SaveKeyInitialized, 1);
         PlayerPrefs.Save();
@@ -91,25 +102,61 @@ public class GameContext : MonoBehaviour
     }
 
     /// <summary>
+    /// インベントリーにモンスター追加
+    /// </summary>
+    public void AddMonsterToInventory(MonsterData newMonster)
+    {
+        if (newMonster == null) return;
+        var owned = OwnedMonsterFactory.CreateFromMaster(newMonster);
+        inventory.ownedMonsters.Add(owned);
+    }
+
+    /// <summary>
     /// パーティ編成画面から現在のパーティを設定
     /// </summary>
     public void SetCurrentParty(OwnedMonster[] members)
     {
-        if (members == null)
-        {
-            party = new OwnedMonster[3];
-            return;
-        }
-
-        int size = Mathf.Min(party.Length, members.Length);
-        for (int i = 0; i < size; i++)
-        {
-            party[i] = members[i];
-        }
+        partyList[CurrentPartyIndex].members = members;
 
         // 必要ならここで SaveGame() してもOK
     }
 
+    public void SetCurrentPartyIndex(int nextIndex)
+    {
+        if (nextIndex < 0)
+        {
+            CurrentPartyIndex = partyList.Length - 1;
+        }
+        else if (nextIndex == partyList.Length)
+        {
+            CurrentPartyIndex = 0;
+        }
+        else
+        {
+            CurrentPartyIndex = nextIndex;
+        }
+        Debug.Log($"CurrentPartyIndex={CurrentPartyIndex}");
+    }
+
+    /// <summary>
+    /// パーティ編成画面から現在のパーティを設定
+    /// </summary>
+    public void SetPartyData(PartyData[] partyList, int partyIndex)
+    {
+        if (partyList == null)
+        {
+            this.partyList = new PartyData[3];
+            return;
+        }
+
+        for (int i = 0; i < partyList.Length; i++)
+        {
+            this.partyList[i] = partyList[i];
+        }
+        CurrentPartyIndex = partyIndex;
+
+        // 必要ならここで SaveGame() してもOK
+    }
     // ▼ ここからはセーブ/ロードの枠だけ用意（中身は後でじっくりでOK）
 
     [System.Serializable]

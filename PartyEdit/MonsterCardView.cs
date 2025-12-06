@@ -13,32 +13,40 @@ public class MonsterCardView : MonoBehaviour
     [SerializeField] private TextMeshProUGUI mgcText;
     [SerializeField] private TextMeshProUGUI defText;
     [SerializeField] private TextMeshProUGUI agiText;
+    [SerializeField] private Image isPartyCover;
     [SerializeField] private Button button;
 
     private OwnedMonster ownedData;
-    private Action<OwnedMonster> onClicked;
+    private int partyNum;
+    private Action<MonsterCardView> onClicked;
 
-    public void Setup(OwnedMonster data, Action<OwnedMonster> onClicked)
+    public void Setup(OwnedMonster data, int partyNum, Action<MonsterCardView> onClicked)
     {
-        Debug.Log("Card SetUp");
+        // Debug.Log("Card SetUp");
         ownedData = data;
+        this.partyNum = partyNum;
         this.onClicked = onClicked;
+        isPartyCover.gameObject.SetActive(false);
 
-        if (data != null && data.master != null)
+        if (ownedData != null && ownedData.master != null)
         {
-            Debug.Log("Card DataSet");
+            // Debug.Log("Card DataSet");
             iconImage.gameObject.SetActive(true);
-            iconImage.sprite = data.master.monsterFarSprite;
-            nameText.text    = data.master.Name;
-            hpText.text      = data.master.hp.ToString();
-            atkText.text     = data.master.atk.ToString();
-            mgcText.text     = data.master.mgc.ToString();
-            defText.text     = data.master.def.ToString();
-            agiText.text     = data.master.agi.ToString();
+            iconImage.sprite = ownedData.monsterFarSprite;
+            nameText.text    = ownedData.Name;
+            hpText.text      = ownedData.hp.ToString();
+            atkText.text     = ownedData.atk.ToString();
+            mgcText.text     = ownedData.mgc.ToString();
+            defText.text     = ownedData.def.ToString();
+            agiText.text     = ownedData.agi.ToString();
+            if (ownedData.isParty && partyNum == -1)
+            {
+                isPartyCover.gameObject.SetActive(true);
+            }
         }
         else
         {
-            Debug.Log("Card Data Null");
+            // Debug.Log("Card Data Null");
             // 空スロット表示など、必要ならここで
             iconImage.gameObject.SetActive(false);
             nameText.text    = "－－－";
@@ -47,15 +55,30 @@ public class MonsterCardView : MonoBehaviour
 
         if (button != null)
         {
-            Debug.Log("Button != Null");
+            // Debug.Log("Button != Null");
             button.onClick.RemoveAllListeners();
             button.onClick.AddListener(OnClick);
         }
     }
 
+    public void SetIsParty(bool isParty)
+    {
+        ownedData.isParty = isParty;
+    }
+
+    public OwnedMonster GetOwnedMonsterData()
+    {
+        return ownedData;
+    }
+
+    public int GetPartyNum()
+    {
+        return partyNum;
+    }
+
     private void OnClick()
     {
         Debug.Log("OnClick Card");
-        onClicked?.Invoke(ownedData);
+        onClicked?.Invoke(this);
     }
 }

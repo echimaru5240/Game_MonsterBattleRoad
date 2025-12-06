@@ -4,16 +4,17 @@ using TMPro;
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using DG.Tweening;
 
 public class BattleUIManager : MonoBehaviour
 {
     [Header("HP UI")]
-    public Slider playerHPBar;
-    public GameObject playerHPBarBackGround;
-    public Slider enemyHPBar;
-    public GameObject enemyHPBarBackGround;
-    public TextMeshProUGUI playerHPText;
-    public TextMeshProUGUI enemyHPText;
+    [SerializeField] private Slider playerHPBar;
+    [SerializeField] private GameObject playerHPBarBackGround;
+    [SerializeField] private Slider enemyHPBar;
+    [SerializeField] private GameObject enemyHPBarBackGround;
+    [SerializeField] private TextMeshProUGUI playerHPText;
+    [SerializeField] private TextMeshProUGUI enemyHPText;
 
     [Header("HPバー段階色設定")]
     [SerializeField] private Color[] fillColors = new Color[5];       // HPバーの色
@@ -23,19 +24,20 @@ public class BattleUIManager : MonoBehaviour
     public BattleTextManager textManager;
 
     [Header("Skill Buttons")]
-    public Transform selectPanelParent;
-    public GameObject selectPanelPrefab;
+    [SerializeField] private Transform selectPanelParent;
+    [SerializeField] private GameObject selectPanelPrefab;
 
     [Header("アクション時の敵味方強調背景")]
-    public Transform playerActionBackParent;
-    public Transform enemyActionBackParent;
+    [SerializeField] private Transform playerActionBackParent;
+    [SerializeField] private Transform enemyActionBackParent;
 
     [Header("Damage Popup")]
-    public GameObject damageTextPrefab;
-    public Transform canvasTransform;
+    [SerializeField] private GameObject damageTextPrefab;
+    [SerializeField] private Transform canvasTransform;
+    [SerializeField] private float damageTextFadeDuration;
 
     [Header("勇気ゲージ UI")]
-    public Slider courageBar;
+    [SerializeField] private Slider courageBar;
 
     // コールバック
     public Action<int, int> OnSkillSelected;
@@ -45,8 +47,10 @@ public class BattleUIManager : MonoBehaviour
     private Dictionary<int, List<Button>> buttonsByUser = new Dictionary<int, List<Button>>();
     private List<TextMeshProUGUI> playerNameLabels = new List<TextMeshProUGUI>();
 
-    // private readonly Color selectedBtnColor = new Color(1f, 111f / 255f, 0f, 1f);
-    [SerializeField] private Color disabledBtnColor = new Color();
+    [SerializeField] private Color popupTextDamageColor = new Color();
+    [SerializeField] private Color popupTextHealColor = new Color();
+    [SerializeField] private Color popupTextCriticalColor = new Color();
+    [SerializeField] private Color popupTextCriticalTextColor = new Color();
 
     private Coroutine playerHpTextRoutine;
     private Coroutine enemyHpTextRoutine;
@@ -178,7 +182,16 @@ public class BattleUIManager : MonoBehaviour
         UpdateHPBarColor(bar, background, toHP);
     }
 
-    private struct HpSeg { public int segFrom; public int segTo; public HpSeg(int f,int t){segFrom=f;segTo=t;} }
+    private struct HpSeg {
+        public int segFrom;
+        public int segTo;
+
+        public HpSeg(int f,int t)
+        {
+            segFrom = f;
+            segTo = t;
+        }
+    }
 
     private List<HpSeg> BuildSegments(int fromHP, int toHP)
     {
@@ -359,7 +372,6 @@ public class BattleUIManager : MonoBehaviour
         foreach (var b in buttonsByUser[userIndex])
         {
             if (b == pressed) continue;
-            // SetButtonImmediateColor(b, disabledBtnColor);
             b.interactable = false;
             b.gameObject.SetActive(false);
         }
@@ -456,25 +468,53 @@ public class BattleUIManager : MonoBehaviour
     public void ShowDamagePopup(BattleCalculator.ActionResult result)
     {
         Vector3 worldPos = result.Target.transform.position + Vector3.up * 2f;
+        Vector3 screenPos = Camera.main.WorldToScreenPoint(worldPos);
         GameObject popup = Instantiate(damageTextPrefab, canvasTransform);
-        popup.transform.position = Camera.main.WorldToScreenPoint(worldPos);
+        popup.transform.position = screenPos;
 
         var dmgText = popup.GetComponent<DamageText>().textMesh;
         dmgText.text = result.Value.ToString();
+
         if (result.IsDamage) {
-            dmgText.color = Color.red;
+            dmgText.color = popupTextDamageColor;
             if (result.IsMiss) {
                 dmgText.color = Color.gray;
                 dmgText.text = "Miss";
             }
             else if (result.IsCritical) {
-                dmgText.color = Color.yellow;
+                dmgText.color = popupTextCriticalColor;
                 popup.transform.localScale = Vector3.one * 1.4f;
+                popup.transform
+                    .DOPunchScale(Vector3.one * 0.5f, 0.25f, 1, 0.5f);
+
+                // クリティカルテキストの表示
+                GameObject popupCritical = Instantiate(damageTextPrefab, canvasTransform);
+                popupCritical.transform.position    = screenPos + new Vector3(0f, 40f, 10f);
+                popupCritical.transform.localScale  = Vector3.one * 1.8f;
+                popupCritical.transform.rotation  = Quaternion.Euler(0f, UnityEngine.Random.Range(-30f, 30f), -30f);
+                var criticalText = popupCritical.GetComponent<DamageText>().textMesh;
+                criticalText.text = "CRITICAL!";
+                criticalText.color = popupTextCriticalTextColor;
+                // ふわっと上に浮かんでフェードアウト
+                var cgCrit = popupCritical.AddComponent<CanvasGroup>();
+                cgCrit.alpha = 1f;
+
+                Sequence critSeq = DOTween.Sequence();
+                critSeq.Append(popupCritical.transform.DOMoveY(popupCritical.transform.position.y + 40f, damageTextFadeDuration));
+                critSeq.Join(cgCrit.DOFade(0f, damageTextFadeDuration));
+                critSeq.OnComplete(() => Destroy(popupCritical));
             }
         }
         else {
             dmgText.color = Color.green;
         }
+        var cg = popup.AddComponent<CanvasGroup>();
+        cg.alpha = 1f;
+
+        // 少し残ってからスッと消える
+        Sequence seq = DOTween.Sequence();
+        seq.Append(cg.DOFade(0f, damageTextFadeDuration));
+        seq.OnComplete(() => Destroy(popup));
     }
 
     // ================================

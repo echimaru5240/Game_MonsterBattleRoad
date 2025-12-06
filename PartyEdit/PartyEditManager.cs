@@ -1,44 +1,57 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using TMPro;
+using System.Collections;
 using System.Collections.Generic;
+using UnityEngine.EventSystems;
+using UnityEngine.UI;
+using DG.Tweening;
 
 public class PartyEditManager : MonoBehaviour
 {
     [Header("Data")]
+    [SerializeField] private int partyDataSize = 3;
     [SerializeField] private int partySize = 3;
 
     [Header("UI - Party")]
-    [SerializeField] private MonsterCardView[] partySlots; // 上の3枚
-    [SerializeField] private TextMeshProUGUI partyNameText;
-    [SerializeField] private TextMeshProUGUI teamHpText;
+    [SerializeField] private PartySwipePager partySwipePager;
+    [SerializeField] private PartyDataView[] partyDataSlots; // 上の3枚
+    [SerializeField] private GameObject[] partyPointerObjs; // 上の3枚
 
     [Header("UI - Owned List")]
     [SerializeField] private Transform listContentParent; // ScrollRect/Viewport/Content
     [SerializeField] private MonsterCardView listItemPrefab;
 
-    private OwnedMonster[] partyMonsters;
+    [Header("UI - Popup")]
+    [SerializeField] private GameObject popupObj;
+
+    private PartyData[] partyDatas;
+    private int currentPartyIndex;
     private PlayerMonsterInventory inventoryMonsters;
 
-    private void Awake()
-    {
-        partyMonsters = new OwnedMonster[partySize];
-    }
 
     private void Start()
     {
         // 戦闘BGM再生
         AudioManager.Instance.PlayHomeBGM();
+        popupObj.gameObject.SetActive(false);
 
+        partyDatas = new PartyData[partyDataSize];
 
-        inventoryMonsters = GameContext.Instance.inventory;
-        partyMonsters = GameContext.Instance.party;
-        RefreshOwnedMonsterList();
-        RefreshPartyUI();
+        inventoryMonsters   = GameContext.Instance.inventory;
+        partyDatas          = GameContext.Instance.partyList;
+        currentPartyIndex   = GameContext.Instance.CurrentPartyIndex;
+
+        partySwipePager.Setup(RefreshPartyDataView);
+        for (int i = 0; i < partyDataSize; i++) {
+            partyDataSlots[i].Setup(RefreshOwnedMonsterListView);
+        }
+        RefreshOwnedMonsterListView();
+        RefreshPartyDataView();
     }
 
     // 下の一覧を生成
-    private void RefreshOwnedMonsterList()
+    private void RefreshOwnedMonsterListView()
     {
         foreach (Transform child in listContentParent)
         {
@@ -47,90 +60,113 @@ public class PartyEditManager : MonoBehaviour
 
         foreach (var owned in inventoryMonsters.ownedMonsters)
         {
-            if (!owned.isParty) {
-                var item = Instantiate(listItemPrefab, listContentParent);
-                // 一覧のカードを押したらパーティに入れる
-                item.Setup(owned, OnOwnedMonsterClicked);
-            }
+            var item = Instantiate(listItemPrefab, listContentParent);
+            // 一覧のカードを押したらパーティに入れる
+            item.Setup(owned, -1, OnOwnedMonsterClicked);
         }
     }
 
     // 一覧から選択された
-    private void OnOwnedMonsterClicked(OwnedMonster owned)
+    private void OnOwnedMonsterClicked(MonsterCardView card)
     {
-        // 1. 空きスロットを探す
-        for (int i = 0; i < partySize; i++)
+        var monster = card.GetOwnedMonsterData();
+
+        if (!monster.isParty)
         {
-            if (partyMonsters[i] == null)
+            // 1. 空きスロットを探す
+            for (int i = 0; i < partySize; i++)
             {
-                partyMonsters[i] = owned;
-                owned.isParty = true;
-                RefreshPartyUI();
-                RefreshOwnedMonsterList();
-                return;
+                if (partyDatas[currentPartyIndex].members[i] == null)
+                {
+                    partyDatas[currentPartyIndex].members[i] = monster;//card.GetOwnedMonsterData();
+                    GameContext.Instance.SetCurrentParty(partyDatas[currentPartyIndex].members);
+                    RefreshPartyDataView();
+                    RefreshOwnedMonsterListView();
+                    return;
+                }
             }
         }
-
-        // 2. 全部埋まっていたらそのまま
-        // 3. パーティ更新
-        RefreshPartyUI();
     }
 
     // パーティ上部の3枚を更新
-    private void RefreshPartyUI()
+    private void RefreshPartyDataView()
     {
-        int totalHp = 0;
+        partyDatas = GameContext.Instance.partyList;
+        currentPartyIndex = GameContext.Instance.CurrentPartyIndex;
+        Debug.Log($"currentPartyIndex: {currentPartyIndex}");
 
-        for (int i = 0; i < partySize; i++)
-        {
-            // 上のスロットにも MonsterCardView を使う
-            partySlots[i].Setup(partyMonsters[i], OnPartyMonsterClicked); // 上はクリック無効なら null
-            if (partyMonsters[i] != null) {
-                totalHp += partyMonsters[i].hp;
-            }
+        int leftPartyDataSlotIndex = currentPartyIndex - 1;
+        int rightPartyDataSlotIndex = currentPartyIndex + 1;
+        if (leftPartyDataSlotIndex == -1) {
+            leftPartyDataSlotIndex = partyDatas.Length -1;
+        }
+        if (rightPartyDataSlotIndex == partyDatas.Length) {
+            rightPartyDataSlotIndex = 0;
         }
 
-        partyNameText.text = "パーティ1";
-        teamHpText.text    = totalHp.ToString();
+        partyDataSlots[0].RefreshPartyData(partyDatas[leftPartyDataSlotIndex], false);
+        partyDataSlots[2].RefreshPartyData(partyDatas[rightPartyDataSlotIndex], false);
+        partyDataSlots[1].RefreshPartyData(partyDatas[currentPartyIndex], true);
+        GameContext.Instance.SetCurrentParty(partyDatas[currentPartyIndex].members);
+        SetPartyPointer();
+        RefreshOwnedMonsterListView();
+        partySwipePager.SetPagePosition();
     }
 
-    // 一覧から選択された
-    private void OnPartyMonsterClicked(OwnedMonster owned)
+    private void SetPartyPointer()
     {
-        // 1. 空きスロットを探す
-        for (int i = 0; i < partyMonsters.Length; i++)
+        for (int i = 0; i < partyPointerObjs.Length; i++)
         {
-            if (partyMonsters[i] == owned)
+            if (currentPartyIndex == i)
             {
-                partyMonsters[i] = null;
-                owned.isParty = false;
-                RefreshPartyUI();
-                RefreshOwnedMonsterList();
-                return;
+                partyPointerObjs[i].SetActive(true);
+            }
+            else {
+                partyPointerObjs[i].SetActive(false);
             }
         }
-
-        // 2. 全部埋まっていたらそのまま
-        // 3. パーティ更新
-        RefreshPartyUI();
     }
 
-    // OKボタンから呼ぶ
-    public void OnClickOk()
+    private void SetPartyData()
     {
         // partyMonsters の内容を、どこかの PartyManager やセーブデータに反映
         Debug.Log("パーティ決定！");
         // ① 現在のパーティを GameContext に保存
         if (GameContext.Instance != null)
         {
-            GameContext.Instance.SetCurrentParty(partyMonsters);
+            GameContext.Instance.SetPartyData(partyDatas, currentPartyIndex);
         }
         else
         {
             Debug.LogWarning("GameContext が見つかりませんでした。");
         }
 
+    }
+
+
+    // OKボタンから呼ぶ
+    public void OnClickOk()
+    {
+        // パーティが空か判定
+        if (partyDataSlots[1].IsEmptyParty()) {
+            StartCoroutine(ShowPopup());
+            return;
+        }
+        // partyMonsters の内容を、どこかの PartyManager やセーブデータに反映
+        Debug.Log("パーティ決定！");
+        // ① 現在のパーティを GameContext に保存
+        SetPartyData();
+
         AudioManager.Instance.PlayButtonSE();
         SceneManager.LoadScene("HomeScene");
     }
+
+    private IEnumerator ShowPopup()
+    {
+        Debug.Log("パーティメンバーがいません");
+        popupObj.gameObject.SetActive(true);
+        yield return new WaitForSeconds(2f);
+        popupObj.gameObject.SetActive(false);
+    }
+
 }
