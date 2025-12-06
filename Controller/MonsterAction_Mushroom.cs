@@ -7,10 +7,10 @@ public class MonsterAction_MushRoom : MonsterActionBase
 {
     [Header("演出設定")]
     public float moveDuration = 0.5f;    // 移動速度
-    public float jumpHeight = 2.5f;
-    public float jumpDuration = 0.4f;
+    public float jumpHeight = 8f;
+    public float jumpDuration = 0.8f;
     public float spinDuration = 3f;
-    public float diveDuration = 1f;   // 急降下時間
+    public float diveDuration = 0.4f;   // 急降下時間
     public float slideDistance = 1.2f;
     public float slideDuration = 0.3f;
 
@@ -21,7 +21,7 @@ public class MonsterAction_MushRoom : MonsterActionBase
     public AudioClip needleSE;
 
     [Header("エフェクト")]
-    public EffectID needleEffect;
+    public EffectID crashEffect;
     public EffectID healEffect;
 
     private Animator anim;
@@ -44,9 +44,9 @@ public class MonsterAction_MushRoom : MonsterActionBase
                 yield return StartCoroutine(Execute_MushCrasher());
                 break;
             /* サボテンジュース */
-            case SkillID.SKILL_ID_MUSH_CRUSHER:
-                yield return StartCoroutine(Execute_MushCrasher());
-                break;
+            // case SkillID.SKILL_ID_MUSH_CRUSHER:
+            //     yield return StartCoroutine(Execute_MushCrasher());
+            //     break;
             default:
                 Debug.LogWarning($"{selfController.name} のスキル「{skill.skillName}」は未実装です。");
                 yield return StartCoroutine(Execute_Heal());
@@ -58,97 +58,68 @@ public class MonsterAction_MushRoom : MonsterActionBase
     private IEnumerator Execute_MushCrasher()
     {
         anim = selfController.GetComponent<Animator>();
+        MonsterController target = currentActionResults[0].Target;
+
         Vector3 start = selfController.transform.position;
-        Vector3 end = Vector3.zero;
         Quaternion startRot = selfController.transform.rotation;
-        spinCount = 0;
 
-        // ? ターゲット方向を向く
-        Vector3 dir = (end - start).normalized;
-        dir.y = 0;
-        Quaternion lookRot = Quaternion.LookRotation(dir);
-        selfController.transform.rotation = lookRot;
+        Vector3 targetPos = target.transform.position;
 
-        // 真ん中まで前進
-        anim.SetBool("DoMove", true);
-        selfController.transform.DOMove(end, moveDuration);
-        selfController.transform.rotation = startRot;
-        yield return null;
-    }
+        anim.SetTrigger("DoJump"); // あれば
 
-    /// <summary>
-    /// ニードルダンスのジャンプ開始（アニメーションイベントから呼ばれる）
-    /// </summary>
-    public void OnNeedleDanceJump()
-    {
-        Debug.Log("OnNeedleDanceJump");
-
-        if (selfController == null || anim == null || currentActionResults == null || currentActionResults.Count == 0)
-        {
-            Debug.LogWarning("OnNeedleDanceJump: state not initialized.");
-            return;
-        }
-
-        // 既存のシーケンスがあれば殺す
-        if (needleDanceSeq != null && needleDanceSeq.IsActive())
-        {
-            needleDanceSeq.Kill();
-        }
-
-        Vector3 startPos = selfController.transform.position;
-
-        needleDanceSeq = DOTween.Sequence();
-
-        // =============================
-        // ジャンプ頂点
-        // =============================
-        Vector3 jumpApex = startPos
-                            + (selfController.isPlayer ? Vector3.forward : Vector3.back) * 3f
-                            + Vector3.up * jumpHeight;
-
-        // カメラ切り替え
-        needleDanceSeq.AppendCallback(() =>
-        {
-            CameraManager.Instance.SwitchToFixed8_13Camera(currentActionResults[0].Target.transform, !selfController.isPlayer);
-            anim.SetTrigger("DoJump");
+        Sequence seq = DOTween.Sequence();
+        seq.AppendCallback(() => {
+            CameraManager.Instance.SwitchToFixedBackCamera(selfController.transform, selfController.isPlayer);
         });
+
+        // 攻撃の余韻時間（砂煙などを出すならここ）
+        seq.AppendInterval(0.4f);
+
+        Vector3 jumpApex = Vector3.zero + Vector3.up * jumpHeight;
+         seq.AppendCallback(() => {
+                anim.SetTrigger("DoJump");
+            });
 
         // 上昇
-        needleDanceSeq.Append(selfController.transform.DOMove(jumpApex, jumpDuration)
+        seq.Append(selfController.transform.DOMove(jumpApex, jumpDuration)
+            .SetEase(Ease.OutCirc));
+        seq.Join(selfController.transform.DORotate(new Vector3(180f, 0, 0), jumpDuration, RotateMode.LocalAxisAdd)
             .SetEase(Ease.OutQuad));
 
-        needleDanceSeq.OnComplete(() =>
-        {
-            anim.SetBool("IsNeedleSpin", true);
+        // 落下
+        seq.Append(selfController.transform.DOMove(targetPos, jumpDuration)
+            .SetEase(Ease.InCirc));
+
+
+        seq.AppendCallback(() => {
+            // 攻撃エフェクトを呼び出す
+            Vector3 effectPos = targetPos + Vector3.up * 1f;
+            EffectManager.Instance.PlayEffectByID(crashEffect, effectPos);
+            Debug.Log("OnAttackHit");
+            selfController.OnAttackLastHit();
+            });
+        // 攻撃の余韻時間（砂煙などを出すならここ）
+        seq.AppendInterval(0.4f);
+
+        // =============================
+        // ? 攻撃終了
+        // =============================
+        seq.OnComplete(() => {
+            selfController.OnAttackEnd();
         });
-    }
 
-    /// <summary>
-    /// 攻撃をする瞬間（アニメーションイベントで呼ばれる）
-    /// </summary>
-    public void OnNeedleDanceSpin()
-    {
-        // 攻撃エフェクトを呼び出す
-        Vector3 effectPos = selfController.transform.position + Vector3.forward * 1f;
-        float rot = selfController.isPlayer ? 0f : 180f;
-        EffectManager.Instance.PlayEffectByID(needleEffect, effectPos, Quaternion.Euler(20f, rot, 180f), 0.3f);
-        AudioManager.Instance.PlaySE(needleSE);
-        selfController.OnAttackHit();
-        spinCount++;
-        if (spinCount > 9) {
-            anim.SetBool("IsNeedleSpin", false);
-            spinCount = 0;
-        }
-        Debug.Log("OnNeedleDanceSpin");
-    }
+        // シーケンス終了を待機
+        yield return seq.WaitForCompletion();
 
-    /// <summary>
-    /// 攻撃をする瞬間（アニメーションイベントで呼ばれる）
-    /// </summary>
-    public void OnNeedleDanceFall()
-    {
-        selfController.transform.DOMove(needleEnd, diveDuration);
-        Debug.Log("OnNeedleDanceFall");
+        // bool jumpFinished = false;
+        // selfController.transform
+        //     .DOJump(targetPos, jumpHeight, 1, jumpDuration)
+        //     .SetEase(Ease.Linear)    // DOJump 内部で放物線になるので Ease はお好み
+        //     .OnComplete(() => jumpFinished = true);
+
+        // while (!jumpFinished)
+        //     yield return null;
+
     }
 
     /// <summary>
@@ -176,17 +147,6 @@ public class MonsterAction_MushRoom : MonsterActionBase
     {
         if (attackSE != null) AudioManager.Instance.PlaySE(attackSE);
         Debug.Log("OnAttack");
-    }
-
-    /// <summary>
-    /// 攻撃が当たる瞬間（アニメーションイベントで呼ばれる）
-    /// </summary>
-    public void OnAttackHit_Skill1()
-    {
-        // 攻撃エフェクトを呼び出す
-        // Vector3 effectPos = selfController.transform.position + Vector3.up * 1f;
-        // EffectManager.Instance.PlayEffectByID(needleEffect, effectPos);
-        // Debug.Log("OnAttackHit");
     }
 
 

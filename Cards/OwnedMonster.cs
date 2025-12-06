@@ -100,3 +100,15 @@ public class PlayerMonsterInventory : ScriptableObject
 {
     public List<OwnedMonster> ownedMonsters = new();
 }
+
+public class PartyData
+{
+    public string partyName;
+    public OwnedMonster[] members = new OwnedMonster[3];
+
+    public PartyData()
+    {
+        partyName = "";
+        members = new OwnedMonster[3];
+    }
+}

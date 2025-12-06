@@ -13,7 +13,8 @@ public class BattleFlowManager : MonoBehaviour
 
     void Start()
     {
-        var party = GameContext.Instance.party;
+        int currentPartyIndex = GameContext.Instance.CurrentPartyIndex;
+        var party = GameContext.Instance.partyList[currentPartyIndex];
         if (party == null)
         {
             Debug.LogWarning("CurrentParty ‚ª null ‚Å‚·");
@@ -21,11 +22,11 @@ public class BattleFlowManager : MonoBehaviour
         }
         else
         {
-            partyBattleData = new MonsterBattleData[party.Length];
+            partyBattleData = new MonsterBattleData[party.members.Length];
 
-            for (int i = 0; i < party.Length; i++)
+            for (int i = 0; i < party.members.Length; i++)
             {
-                var owned = party[i];
+                var owned = party.members[i];
                 if (owned == null)
                 {
                     partyBattleData[i] = null; // ‹óƒXƒƒbƒg
