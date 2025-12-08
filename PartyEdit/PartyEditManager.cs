@@ -22,6 +22,9 @@ public class PartyEditManager : MonoBehaviour
     [SerializeField] private Transform listContentParent; // ScrollRect/Viewport/Content
     [SerializeField] private MonsterCardView listItemPrefab;
 
+    [Header("UI - Detail Data")]
+    [SerializeField] private MonsterDetailDataView monsterDetailDataView;
+
     [Header("UI - Popup")]
     [SerializeField] private GameObject popupObj;
 
@@ -44,7 +47,7 @@ public class PartyEditManager : MonoBehaviour
 
         partySwipePager.Setup(RefreshPartyDataView);
         for (int i = 0; i < partyDataSize; i++) {
-            partyDataSlots[i].Setup(RefreshOwnedMonsterListView);
+            partyDataSlots[i].Setup(RefreshOwnedMonsterListView, OnMonsterCardViewLongPressed);
         }
         RefreshOwnedMonsterListView();
         RefreshPartyDataView();
@@ -62,13 +65,14 @@ public class PartyEditManager : MonoBehaviour
         {
             var item = Instantiate(listItemPrefab, listContentParent);
             // 一覧のカードを押したらパーティに入れる
-            item.Setup(owned, -1, OnOwnedMonsterClicked);
+            item.Setup(owned, -1, OnOwnedMonsterClicked, OnMonsterCardViewLongPressed, OnPartyRemoveButtonClicked);
         }
     }
 
     // 一覧から選択された
     private void OnOwnedMonsterClicked(MonsterCardView card)
     {
+        Debug.Log($"OnOwnedMonsterClicked editmanager");
         var monster = card.GetOwnedMonsterData();
 
         if (!monster.isParty)
@@ -86,6 +90,13 @@ public class PartyEditManager : MonoBehaviour
                 }
             }
         }
+    }
+
+    private void OnPartyRemoveButtonClicked(MonsterCardView card)
+    {
+        Debug.Log($"OnPartyRemoveButtonClicked editmanager");
+        currentPartyIndex = GameContext.Instance.CurrentPartyIndex;
+        partyDataSlots[1].OnPartyRemoveButtonClicked(card);
     }
 
     // パーティ上部の3枚を更新
@@ -143,6 +154,15 @@ public class PartyEditManager : MonoBehaviour
 
     }
 
+    private void ShowMonsterDetailDataView(MonsterCardView card)
+    {
+        monsterDetailDataView.Show(card);
+    }
+
+    private void OnMonsterCardViewLongPressed(MonsterCardView card)
+    {
+        ShowMonsterDetailDataView(card);
+    }
 
     // OKボタンから呼ぶ
     public void OnClickOk()

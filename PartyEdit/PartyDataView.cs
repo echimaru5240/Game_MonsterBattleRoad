@@ -17,11 +17,13 @@ public class PartyDataView : MonoBehaviour
     private PartyData partyData;
     private bool isCurrentParty;
     private Action onRefresh;
+    private Action<MonsterCardView> onMonsterCardViewLongPressed;
 
-    public void Setup(Action onRefresh)
+    public void Setup(Action onRefresh, Action<MonsterCardView> onMonsterCardViewLongPressed)
     {
         partyData = new PartyData();
         this.onRefresh = onRefresh;
+        this.onMonsterCardViewLongPressed = onMonsterCardViewLongPressed;
     }
 
     public void RefreshPartyData(PartyData partyData, bool isCurrentParty)
@@ -35,7 +37,7 @@ public class PartyDataView : MonoBehaviour
         {
             // 上のスロットにも MonsterCardView を使う
             var monster = partyData.members[i];
-            partySlots[i].Setup(monster, i, OnPartyMonsterClicked); // 上はクリック無効なら null
+            partySlots[i].Setup(monster, i, OnPartyMonsterClicked, onMonsterCardViewLongPressed); // 上はクリック無効なら null
             if (monster != null) {
                 totalHp += monster.hp;
                 monster.isParty = isCurrentParty ?  true : false;
@@ -59,10 +61,27 @@ public class PartyDataView : MonoBehaviour
         return true;
     }
 
+    public void OnPartyRemoveButtonClicked(MonsterCardView card)
+    {
+        Debug.Log($"OnPartyRemoveButtonClicked dataview: {card.GetOwnedMonsterData().Name}");
+        for (int i = 0; i < partySize; i++)
+        {
+            Debug.Log($"OnPartyRemoveButtonClicked {i}");
+            if (partyData.members[i] == card.GetOwnedMonsterData())
+            {
+                partyData.members[i] = null;
+                card.SetIsParty(false);
+                RefreshPartyData(partyData, isCurrentParty);
+                onRefresh?.Invoke();
+                return;
+            }
+        }
+    }
+
     // 一覧から選択された
     private void OnPartyMonsterClicked(MonsterCardView card)
     {
-        if (!isCurrentParty) {
+        if (!isCurrentParty || card.GetOwnedMonsterData() == null) {
             return;
         }
         Debug.Log("OnClick Card");
