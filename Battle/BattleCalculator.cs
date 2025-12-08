@@ -145,6 +145,9 @@ public static class BattleCalculator
             case  SkillCategory.MAGICAL:
                 atk = attacker.mgc;
                 break;
+            case  SkillCategory.SPECIAL:
+                atk = (attacker.atk + attacker.mgc) / 2;
+                break;
             default:
                 atk = attacker.atk;
                 break;

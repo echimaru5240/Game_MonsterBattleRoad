@@ -489,9 +489,9 @@ public class BattleUIManager : MonoBehaviour
 
                 // クリティカルテキストの表示
                 GameObject popupCritical = Instantiate(damageTextPrefab, canvasTransform);
-                popupCritical.transform.position    = screenPos + new Vector3(0f, 40f, 10f);
+                popupCritical.transform.position    = screenPos + new Vector3(0f, 100f, -10f);
                 popupCritical.transform.localScale  = Vector3.one * 1.8f;
-                popupCritical.transform.rotation  = Quaternion.Euler(0f, UnityEngine.Random.Range(-30f, 30f), -30f);
+                popupCritical.transform.rotation  = Quaternion.Euler(0f, UnityEngine.Random.Range(-30f, 30f), UnityEngine.Random.Range(-30f, 30f));
                 var criticalText = popupCritical.GetComponent<DamageText>().textMesh;
                 criticalText.text = "CRITICAL!";
                 criticalText.color = popupTextCriticalTextColor;
