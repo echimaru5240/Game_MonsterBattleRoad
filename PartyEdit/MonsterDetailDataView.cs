@@ -10,30 +10,65 @@ using DG.Tweening;
 public class MonsterDetailDataView : MonoBehaviour
 {
     [SerializeField] private GameObject root;          // MonsterDetailPanel 自身でもOK
-    [SerializeField] private MonsterCardView bigCard;  // 大きめカード用
-    [SerializeField] private SkillDataView[] skillDataView;
+    [SerializeField] private Transform monsterPosition;
 
-    private void Awake()
+    [SerializeField] private TextMeshProUGUI hpText;
+    [SerializeField] private TextMeshProUGUI atkText;
+    [SerializeField] private TextMeshProUGUI mgcText;
+    [SerializeField] private TextMeshProUGUI defText;
+    [SerializeField] private TextMeshProUGUI agiText;
+
+    [SerializeField] private TextMeshProUGUI indexText;
+    [SerializeField] private MonsterDetailDataSlot[] monsterDetailDataSlot;
+
+    [SerializeField] private float spacing = 6f;
+
+    public void Setup()
     {
         root.SetActive(false);
     }
 
-    public void Show(MonsterCardView card)
+    public void Show(OwnedMonster monster, int index, int total, OwnedMonster prevMonster, OwnedMonster nextMonster)
     {
-        if (card == null) return;
+        DestroyObj();
+
+        if (monster == null) {
+            Debug.LogWarning("Show card null");
+            return;
+        }
+        hpText.text = monster.hp.ToString();
+        atkText.text = monster.atk.ToString();
+        mgcText.text = monster.mgc.ToString();
+        defText.text = monster.def.ToString();
+        agiText.text = monster.agi.ToString();
+
+        indexText.text = $"{index+1}/{total}";
+
+        monsterDetailDataSlot[0].Setup(prevMonster, monsterPosition, -6f);
+        monsterDetailDataSlot[1].Setup(monster, monsterPosition, 0f);
+        monsterDetailDataSlot[2].Setup(nextMonster, monsterPosition, 6f);
 
         root.SetActive(true);
+    }
 
-        // カード部分に同じ情報を流し込む（クリック・長押しは不要なので null）
-        bigCard.SetupDetailDataView(card);
-        for (int i = 0; i < 2; i++)
+    public void OnMonsterTap()
+    {
+        Debug.Log("On Tap!");
+        monsterDetailDataSlot[1].OnMonsterTap();
+    }
+
+    public void DestroyObj()
+    {
+        foreach (var slot in monsterDetailDataSlot)
         {
-            skillDataView[i].Setup(SkillDatabase.Get(card.GetOwnedMonsterData().skills[i]));
+            slot.DestroyObj();
         }
     }
 
     public void Hide()
     {
+        Debug.Log("Hide");
+        DestroyObj();
         root.SetActive(false);
     }
 

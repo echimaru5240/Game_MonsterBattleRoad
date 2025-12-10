@@ -7,6 +7,16 @@ using UnityEngine.EventSystems;
 using UnityEngine.UI;
 using DG.Tweening;
 
+// ================================
+// パーティ編成メニュー状態
+// ================================
+public enum PartyEditState
+{
+    NONE,
+    LIST,
+    DETAIL,
+}
+
 public class PartyEditManager : MonoBehaviour
 {
     [Header("Data")]
@@ -23,6 +33,7 @@ public class PartyEditManager : MonoBehaviour
     [SerializeField] private MonsterCardView listItemPrefab;
 
     [Header("UI - Detail Data")]
+    [SerializeField] private DetailSwipePager detailSwipePager;
     [SerializeField] private MonsterDetailDataView monsterDetailDataView;
 
     [Header("UI - Popup")]
@@ -32,12 +43,18 @@ public class PartyEditManager : MonoBehaviour
     private int currentPartyIndex;
     private PlayerMonsterInventory inventoryMonsters;
 
+    // 状態管理
+    private PartyEditState state = PartyEditState.NONE;
+
 
     private void Start()
     {
+        state = PartyEditState.LIST;
+
         // 戦闘BGM再生
         AudioManager.Instance.PlayHomeBGM();
         popupObj.gameObject.SetActive(false);
+        monsterDetailDataView.Setup();
 
         partyDatas = new PartyData[partyDataSize];
 
@@ -45,12 +62,38 @@ public class PartyEditManager : MonoBehaviour
         partyDatas          = GameContext.Instance.partyList;
         currentPartyIndex   = GameContext.Instance.CurrentPartyIndex;
 
-        partySwipePager.Setup(RefreshPartyDataView);
+        partySwipePager.Setup(RefreshAllView);
         for (int i = 0; i < partyDataSize; i++) {
             partyDataSlots[i].Setup(RefreshOwnedMonsterListView, OnMonsterCardViewLongPressed);
         }
-        RefreshOwnedMonsterListView();
-        RefreshPartyDataView();
+        // RefreshOwnedMonsterListView();
+        // RefreshPartyDataView();
+        RefreshAllView();
+    }
+
+    private void ChangeState(PartyEditState newState)
+    {
+        state = newState;
+
+        switch (state)
+        {
+            case PartyEditState.LIST:
+                for (int i = 0; i < partyDataSlots.Length; i++)
+                {
+                    partyDataSlots[i].gameObject.SetActive(true);
+                }
+                listContentParent.gameObject.SetActive(true);
+
+                break;
+            case PartyEditState.DETAIL:
+                // ShowMonsterDetailDataView(card);
+                for (int i = 0; i < partyDataSlots.Length; i++)
+                {
+                    partyDataSlots[i].gameObject.SetActive(false);
+                }
+                listContentParent.gameObject.SetActive(false);
+                break;
+        }
     }
 
     // 下の一覧を生成
@@ -61,11 +104,13 @@ public class PartyEditManager : MonoBehaviour
             Destroy(child.gameObject);
         }
 
-        foreach (var owned in inventoryMonsters.ownedMonsters)
+        for (int i = 0; i < inventoryMonsters.ownedMonsters.Count; i++)
         {
+            var owned = inventoryMonsters.ownedMonsters[i];
             var item = Instantiate(listItemPrefab, listContentParent);
             // 一覧のカードを押したらパーティに入れる
             item.Setup(owned, -1, OnOwnedMonsterClicked, OnMonsterCardViewLongPressed, OnPartyRemoveButtonClicked);
+            item.SetCardIndex(i);
         }
     }
 
@@ -85,7 +130,7 @@ public class PartyEditManager : MonoBehaviour
                     partyDatas[currentPartyIndex].members[i] = monster;//card.GetOwnedMonsterData();
                     GameContext.Instance.SetCurrentParty(partyDatas[currentPartyIndex].members);
                     RefreshPartyDataView();
-                    RefreshOwnedMonsterListView();
+                    card.Setup(monster, -1, OnOwnedMonsterClicked, OnMonsterCardViewLongPressed, OnPartyRemoveButtonClicked);
                     return;
                 }
             }
@@ -102,9 +147,7 @@ public class PartyEditManager : MonoBehaviour
     // パーティ上部の3枚を更新
     private void RefreshPartyDataView()
     {
-        partyDatas = GameContext.Instance.partyList;
-        currentPartyIndex = GameContext.Instance.CurrentPartyIndex;
-        Debug.Log($"currentPartyIndex: {currentPartyIndex}");
+        RefreshPrivatePartyData();
 
         int leftPartyDataSlotIndex = currentPartyIndex - 1;
         int rightPartyDataSlotIndex = currentPartyIndex + 1;
@@ -120,8 +163,21 @@ public class PartyEditManager : MonoBehaviour
         partyDataSlots[1].RefreshPartyData(partyDatas[currentPartyIndex], true);
         GameContext.Instance.SetCurrentParty(partyDatas[currentPartyIndex].members);
         SetPartyPointer();
-        RefreshOwnedMonsterListView();
+        // RefreshOwnedMonsterListView();
         partySwipePager.SetPagePosition();
+    }
+
+    private void RefreshAllView()
+    {
+        RefreshPartyDataView();
+        RefreshOwnedMonsterListView();
+    }
+
+    private void RefreshPrivatePartyData()
+    {
+        partyDatas = GameContext.Instance.partyList;
+        currentPartyIndex = GameContext.Instance.CurrentPartyIndex;
+        Debug.Log($"currentPartyIndex: {currentPartyIndex}");
     }
 
     private void SetPartyPointer()
@@ -154,14 +210,125 @@ public class PartyEditManager : MonoBehaviour
 
     }
 
-    private void ShowMonsterDetailDataView(MonsterCardView card)
+    private void ShowMonsterDetailDataView(int cardIndex, int partyIndex)
     {
-        monsterDetailDataView.Show(card);
+        RefreshPrivatePartyData();
+        int monsterNum = inventoryMonsters.ownedMonsters.Count;
+
+        int currentIndex = cardIndex;
+        int prevIndex = currentIndex - 1;
+        int nextIndex = currentIndex + 1;
+
+        if (partyIndex == -1)
+        {
+            if (prevIndex < 0)
+                prevIndex = monsterNum - 1;
+
+            if (nextIndex > monsterNum - 1)
+                nextIndex = 0;
+        }
+        else {
+            monsterNum = 3;
+            if (prevIndex < 0)
+                prevIndex = 2;
+
+            if (nextIndex > 2)
+                nextIndex = 0;
+        }
+
+        Debug.Log($"prev: {prevIndex}, next: {nextIndex}");
+
+        monsterDetailDataView.Show(inventoryMonsters.ownedMonsters[currentIndex], currentIndex, monsterNum, inventoryMonsters.ownedMonsters[prevIndex], inventoryMonsters.ownedMonsters[nextIndex]);
+        detailSwipePager.SetCardIndex(cardIndex, partyIndex);
+        detailSwipePager.SetPagePosition();
+    }
+
+    // インデックスを 0 ～ count-1 の範囲に丸める（-1 → 最後、count → 0）
+    private int WrapIndex(int index, int count)
+    {
+        if (count <= 0) return 0;
+
+        index %= count;
+        if (index < 0)
+            index += count;
+
+        return index;
+    }
+
+    private void RefreshMonsterDetailDataView(int cardIndex, int partyIndex)
+    {
+        RefreshPrivatePartyData();
+
+        int currentIndex;
+        int prevIndex;
+        int nextIndex;
+
+        // ==========
+        // インベントリ側（所持モンスター一覧）
+        // ==========
+        if (partyIndex == -1)
+        {
+            int monsterNum = inventoryMonsters.ownedMonsters.Count;
+            if (monsterNum == 0)
+            {
+                Debug.LogWarning("No monsters in inventory.");
+                return;
+            }
+
+            currentIndex = WrapIndex(cardIndex, monsterNum);
+            prevIndex    = WrapIndex(currentIndex - 1, monsterNum);
+            nextIndex    = WrapIndex(currentIndex + 1, monsterNum);
+
+            Debug.Log($"[Inventory] current: {currentIndex}, prev: {prevIndex}, next: {nextIndex}");
+
+            monsterDetailDataView.Show(
+                inventoryMonsters.ownedMonsters[currentIndex],
+                currentIndex,
+                monsterNum,
+                inventoryMonsters.ownedMonsters[prevIndex],
+                inventoryMonsters.ownedMonsters[nextIndex]
+            );
+        }
+        // ==========
+        // パーティ側（3体固定）
+        // ==========
+        else
+        {
+            var members = partyDatas[currentPartyIndex].members;
+            int memberCount = members.Length; // 想定: 3
+
+            if (memberCount == 0)
+            {
+                Debug.LogWarning("No members in party.");
+                return;
+            }
+
+            currentIndex = WrapIndex(cardIndex, memberCount);
+            prevIndex    = WrapIndex(currentIndex - 1, memberCount);
+            nextIndex    = WrapIndex(currentIndex + 1, memberCount);
+
+            Debug.Log($"[Party] current: {currentIndex}, prev: {prevIndex}, next: {nextIndex}");
+
+            monsterDetailDataView.Show(
+                members[currentIndex],
+                currentIndex,
+                memberCount,
+                members[prevIndex],
+                members[nextIndex]
+            );
+        }
+
+        // 共通処理
+        Debug.Log($"prev: {prevIndex}, next: {nextIndex}");
+
+        detailSwipePager.SetCardIndex(currentIndex, partyIndex);
+        detailSwipePager.SetPagePosition();
     }
 
     private void OnMonsterCardViewLongPressed(MonsterCardView card)
     {
-        ShowMonsterDetailDataView(card);
+        detailSwipePager.Setup(RefreshMonsterDetailDataView);
+        ShowMonsterDetailDataView(card.Index, card.PartyIndex);
     }
 
     // OKボタンから呼ぶ

@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using System.Collections;
 using System.Collections.Generic;
+using DG.Tweening;
 
 // ================================
 // バトル状態構造体
@@ -64,6 +65,7 @@ public class BattleManager : MonoBehaviour
 
     // 状態管理
     private BattleState state = BattleState.NONE;
+    public static bool IsPaused { get; private set; }
 
     // 選択管理
     private int[] selectedByUser;
@@ -372,7 +374,7 @@ public class BattleManager : MonoBehaviour
 
         battleUIManager.HideAttackText(isPlayer);
         UpdateHPBars();
-        if (isPlayer) AddCourage(10);
+        // if (isPlayer) AddCourage(10);
 
         // モンスターの位置を戻す
         SetMonsterPositionForWaitinig();
@@ -482,6 +484,27 @@ public class BattleManager : MonoBehaviour
     public void OnBattleEnd()
     {
         onBattleEnd?.Invoke(false, 0);
+    }
+
+    public static void Pause()
+    {
+        IsPaused = true;
+        Time.timeScale = 0f;   // 物理・Animatorを止める
+        DOTween.PauseAll();    // DOTweenも停止
+    }
+
+    public static void Resume()
+    {
+        IsPaused = false;
+        Time.timeScale = 1f;
+        DOTween.PlayAll();
+    }
+
+    public static void Playx2()
+    {
+        IsPaused = false;
+        Time.timeScale = 2f;
+        DOTween.PlayAll();
     }
 
     private void ResetSelections()

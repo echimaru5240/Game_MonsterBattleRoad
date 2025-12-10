@@ -38,6 +38,7 @@ public class PartyDataView : MonoBehaviour
             // 上のスロットにも MonsterCardView を使う
             var monster = partyData.members[i];
             partySlots[i].Setup(monster, i, OnPartyMonsterClicked, onMonsterCardViewLongPressed); // 上はクリック無効なら null
+            partySlots[i].SetCardIndex(i);
             if (monster != null) {
                 totalHp += monster.hp;
                 monster.isParty = isCurrentParty ?  true : false;
@@ -85,7 +86,7 @@ public class PartyDataView : MonoBehaviour
             return;
         }
         Debug.Log("OnClick Card");
-        partyData.members[card.GetPartyNum()] = null;
+        partyData.members[card.PartyIndex] = null;
         card.SetIsParty(false);
         RefreshPartyData(partyData, isCurrentParty);
         onRefresh?.Invoke();
