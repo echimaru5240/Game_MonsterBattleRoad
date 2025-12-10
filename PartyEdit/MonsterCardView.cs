@@ -3,6 +3,8 @@ using UnityEngine.UI;
 using UnityEngine.EventSystems;
 using TMPro;
 using System;
+using CandyCoded.HapticFeedback;
+using DG.Tweening;
 
 public class MonsterCardView : MonoBehaviour,
     IPointerDownHandler, IPointerUpHandler, IPointerExitHandler
@@ -20,13 +22,20 @@ public class MonsterCardView : MonoBehaviour,
 
     [Header("Long Press")]
     [SerializeField] private float longPressThreshold = 0.6f; // 0.6秒長押しで発火
-    [SerializeField] private Image longPressGauge;            // ← 円形ゲージ
+
     [Header("Click判定")]
     [SerializeField] private float clickMoveThreshold = 20f; // 何pxまでならタップ扱いか
-    [SerializeField] private float clickTimeThreshold = 0.1f; // 何pxまでならタップ扱いか
+    [SerializeField] private float clickTimeThreshold = 0.1f; // 何秒までならタップ扱いか
 
+    [Header("Press Animation")]
+    [SerializeField] private float pressedScale = 0.95f;         // 押してる間の縮小倍率
+    [SerializeField] private float pressScaleDuration = 0.08f;   // 縮小にかける時間
+    [SerializeField] private float releasePopScale = 1.05f;      // 離したときに一瞬膨らむ倍率
+    [SerializeField] private float releasePopDuration = 0.12f;   // 膨らみ→戻りにかける合計時間
+
+    public int Index { get; private set; }
+    public int PartyIndex { get; private set; }
     private OwnedMonster ownedData;
-    private int partyNum;
     private Action<MonsterCardView> onClicked;
     private Action<MonsterCardView> onLongPress;
     private Action<MonsterCardView> onPartyRemove;
@@ -37,11 +46,20 @@ public class MonsterCardView : MonoBehaviour,
     private bool longPressTriggered;
     private Vector2 pointerDownPos;
 
-    public void Setup(OwnedMonster data, int partyNum, Action<MonsterCardView> onClicked, Action<MonsterCardView> onLongPress, Action<MonsterCardView> onPartyRemove = null)
+    // ★ 元のスケールと現在のTweenを保持
+    private Vector3 defaultScale;
+    private Tween scaleTween;
+
+    private void Awake()
+    {
+        defaultScale = transform.localScale;
+    }
+
+    public void Setup(OwnedMonster data, int partyIndex, Action<MonsterCardView> onClicked, Action<MonsterCardView> onLongPress, Action<MonsterCardView> onPartyRemove = null)
     {
         // Debug.Log("Card SetUp");
         ownedData = data;
-        this.partyNum = partyNum;
+        PartyIndex = partyIndex;
         this.onClicked = onClicked;
         this.onLongPress = onLongPress;
         this.onPartyRemove = onPartyRemove;
@@ -60,14 +78,10 @@ public class MonsterCardView : MonoBehaviour,
             mgcText.text     = ownedData.mgc.ToString();
             defText.text     = ownedData.def.ToString();
             agiText.text     = ownedData.agi.ToString();
-            if (ownedData.isParty && partyNum == -1)
+            if (ownedData.isParty && partyIndex == -1)
             {
                 isPartyCover.gameObject.SetActive(true);
                 partyRemoveBtn.SetActive(true);
-            }
-            if (partyNum == -1)
-            {
-                clickMoveThreshold = 50f;
             }
         }
         else
@@ -78,6 +92,14 @@ public class MonsterCardView : MonoBehaviour,
             nameText.text    = "－－－";
             hpText.text = atkText.text = mgcText.text = defText.text = agiText.text = "-";
         }
+
+        // 念のため毎回リセット
+        transform.localScale = defaultScale;
+    }
+
+    public void SetCardIndex(int index)
+    {
+        Index = index;
     }
 
     public void SetupDetailDataView(MonsterCardView card)
@@ -90,15 +112,8 @@ public class MonsterCardView : MonoBehaviour,
 
     private void Update()
     {
-
         if (!isPressing)
         {
-            // 押してないときはゲージを 0 にして非表示に
-            if (longPressGauge != null)
-            {
-                longPressGauge.fillAmount = 0f;
-                longPressGauge.gameObject.SetActive(false);
-            }
             return;
         }
 
@@ -107,35 +122,16 @@ public class MonsterCardView : MonoBehaviour,
             return;
         }
 
-        // ここから「押している間」
-        if (longPressGauge != null && pressTime >= 0.05f)
-        {
-            longPressGauge.gameObject.SetActive(true);
-        }
-
         if (!longPressTriggered)
         {
             pressTime += Time.deltaTime;
-
-            // 閾値に対する割合 0.0?1.0
-            float ratio = Mathf.Clamp01(pressTime / longPressThreshold);
-
-            if (longPressGauge != null)
-            {
-                longPressGauge.fillAmount = ratio;   // ★ ここで円形ゲージが溜まる
-            }
 
             if (pressTime >= longPressThreshold)
             {
                 Debug.Log("onLongPress Card");
                 longPressTriggered = true;
+                HapticFeedback.LightFeedback();
                 onLongPress?.Invoke(this);
-
-                // 閾値に達したらゲージいっぱいにしてもOK
-                if (longPressGauge != null)
-                {
-                    longPressGauge.fillAmount = 1f;
-                }
             }
         }
     }
@@ -151,17 +147,6 @@ public class MonsterCardView : MonoBehaviour,
         return ownedData;
     }
 
-    public int GetPartyNum()
-    {
-        return partyNum;
-    }
-
-    // private void OnClick()
-    // {
-    //     Debug.Log("OnClick Card");
-    //     onClicked?.Invoke(this);
-    // }
-
     public void OnPointerDown(PointerEventData eventData)
     {
         Debug.Log("OnPointerDown Card");
@@ -171,6 +156,16 @@ public class MonsterCardView : MonoBehaviour,
         // ★ 押したときの位置を記録
         pointerDownPos = eventData.position;
         Debug.Log($"pointerDownPos {pointerDownPos}");
+
+        // ★ 詳細ビュー用カードはスケール演出しない
+        if (isDetailView) return;
+
+        // ★ 押したときに少し縮小
+        scaleTween?.Kill();
+        transform.localScale = defaultScale;
+        scaleTween = transform
+            .DOScale(defaultScale * pressedScale, pressScaleDuration)
+            .SetEase(Ease.OutQuad);
     }
 
     public void OnPointerUp(PointerEventData eventData)
@@ -187,13 +182,37 @@ public class MonsterCardView : MonoBehaviour,
         if (moveDist > clickMoveThreshold)
         {
             Debug.Log($"Ignore click: moved {moveDist}px (threshold {clickMoveThreshold})");
+            // スクロールだった場合はスケールだけ元に戻す
+            scaleTween?.Kill();
+            transform.localScale = defaultScale;
             return;
         }
-        // 長押しが発生していないときだけ「通常タップ」として扱う
-        if (!longPressTriggered && pressTime < clickTimeThreshold)
+
+        // ★ 離したときに「ポン」と膨らんで戻る
+        if (!isDetailView)
         {
-            Debug.Log("onClicked Card");
-            onClicked?.Invoke(this);
+            scaleTween?.Kill();
+            Sequence seq = DOTween.Sequence();
+            seq.Append(transform.DOScale(defaultScale * releasePopScale, releasePopDuration * 0.5f)
+                .SetEase(Ease.OutQuad));
+            seq.Append(transform.DOScale(defaultScale, releasePopDuration * 0.5f)
+                .SetEase(Ease.OutQuad));
+            scaleTween = seq;
+        }
+
+        // 長押しが発生していないときだけ「通常タップ」として扱う
+        if (!longPressTriggered)
+        {
+            if (pressTime < clickTimeThreshold)
+            {
+                Debug.Log($"onClicked Card [{Index}]");
+                onClicked?.Invoke(this);
+            }
+            else if (pressTime >= clickTimeThreshold) {
+                Debug.Log("onLongPress Card");
+                longPressTriggered = true;
+                onLongPress?.Invoke(this);
+            }
         }
     }
 
@@ -201,11 +220,26 @@ public class MonsterCardView : MonoBehaviour,
     {
         // 指が外に出たらキャンセル
         isPressing = false;
+
+        // スケールも元に戻す
+        if (!isDetailView)
+        {
+            scaleTween?.Kill();
+            transform.localScale = defaultScale;
+        }
     }
 
     public void OnPartyRemoveButtonClicked()
     {
         Debug.Log("OnPartyRemoveButtonClicked");
         onPartyRemove?.Invoke(this);
+    }
+
+
+    private void OnDisable()
+    {
+        // カードが非表示になったときなどにTweenを止めてスケールリセット
+        scaleTween?.Kill();
+        transform.localScale = defaultScale;
     }
 }
