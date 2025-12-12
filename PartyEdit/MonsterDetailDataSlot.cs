@@ -1,11 +1,8 @@
 using UnityEngine;
-using UnityEngine.SceneManagement;
 using TMPro;
 using System.Collections;
 using System.Collections.Generic;
-using UnityEngine.EventSystems;
 using UnityEngine.UI;
-using DG.Tweening;
 
 public class MonsterDetailDataSlot : MonoBehaviour
 {
@@ -16,42 +13,21 @@ public class MonsterDetailDataSlot : MonoBehaviour
     private GameObject monsterObj;
     private MonsterController monsterController;
 
-    public void Setup(OwnedMonster monster, Transform position, float spacing)
+    public void Setup(OwnedMonster monster)
     {
-        if (monster == null) {
-            Debug.LogWarning("Show card null");
+        if (monster == null)
+        {
+            Debug.LogWarning("MonsterDetailDataSlot.Setup: monster is null");
             return;
         }
+
         this.monster = monster;
-        nameText.text = monster.Name.ToString();
+        nameText.text = monster.Name;
 
-        // 生成
-        monsterObj = Instantiate(monster.prefab, position);
-        monsterObj.transform.localPosition = new Vector3(spacing, 0, 0);
-        monsterController = monsterObj.GetComponent<MonsterController>();
-
-        for (int i = 0; i < 2; i++)
+        // スキル表示（とりあえず先頭2つ）
+        for (int i = 0; i < skillDataView.Length && i < monster.skills.Length; i++)
         {
             skillDataView[i].Setup(SkillDatabase.Get(monster.skills[i]));
         }
-    }
-
-    public void OnMonsterTap()
-    {
-
-        Animator animator = monsterController.GetComponent<Animator>();
-        if (animator != null)
-        {
-            animator.SetTrigger("DoLastHit");
-            Debug.Log($"{monster.Name}  DoLastHit");
-        }
-        else{
-            Debug.Log("NULL");
-        }
-    }
-
-    public void DestroyObj()
-    {
-        Destroy(monsterObj);
     }
 }
