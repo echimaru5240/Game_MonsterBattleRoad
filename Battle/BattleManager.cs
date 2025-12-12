@@ -483,6 +483,7 @@ public class BattleManager : MonoBehaviour
 
     public void OnBattleEnd()
     {
+        Time.timeScale = 1f;   // •¨—EAnimator‚ğ~‚ß‚é
         onBattleEnd?.Invoke(false, 0);
     }
 
