@@ -1,8 +1,8 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using System.Collections;
-using UnityEngine.UI;
 using System;
+using UnityEngine.UI;
 
 // ================================
 // パーティ編成メニュー状態
@@ -14,57 +14,72 @@ public enum PartyEditState
     DETAIL,
 }
 
+// ★ 入れ替え状態（2段階 + none）
+public enum ReplaceState
+{
+    None,
+    CandidateSelected,   // 候補選択（入れ替えボタン表示）
+    SelectingTarget      // 入れ替え先選択中（ハイライトのみ、所持タップでキャンセル）
+}
+
 public class PartyEditManager : MonoBehaviour
 {
     [Header("Data")]
     [SerializeField] private int partyDataSize = 3; // パーティ数
-    [SerializeField] private int partySize     = 3; // 1パーティの枠数
+    [SerializeField] private int partySize = 3;     // 1パーティの枠数
 
     [Header("UI - Party")]
-    [SerializeField] private PartySwipePager   partySwipePager;
-    [SerializeField] private PartyDataView[]   partyDataSlots;   // 上の3枚
-    [SerializeField] private GameObject[]      partyPointerObjs; // 下のインジケータ
+    [SerializeField] private PartySwipePager partySwipePager;
+    [SerializeField] private PartyDataView[] partyDataSlots;   // 上の3枚
+    [SerializeField] private GameObject[] partyPointerObjs;    // 下のインジケータ
 
     [Header("UI - Owned List")]
-    [SerializeField] private Transform         listContentParent; // ScrollRect/Viewport/Content
-    [SerializeField] private MonsterCardView   listItemPrefab;
+    [SerializeField] private Transform listContentParent; // ScrollRect/Viewport/Content
+    [SerializeField] private MonsterCardView listItemPrefab;
 
     [Header("UI - Detail Data")]
-    [SerializeField] private DetailSwipePager      detailSwipePager;
+    [SerializeField] private DetailSwipePager detailSwipePager;
     [SerializeField] private MonsterDetailDataView monsterDetailDataView;
 
     [Header("UI - Popup")]
-    [SerializeField] private GameObject popupObj;
+    [SerializeField] private PartyEditPopup popup;
 
-    private PartyData[]            partyDatas;
-    private int                    currentPartyIndex;
+    private PartyData[] partyDatas;
+    private int currentPartyIndex;
     private PlayerMonsterInventory inventoryMonsters;
 
     // 状態管理
     private PartyEditState state = PartyEditState.NONE;
 
-    // 詳細画面用の状態（PartyEditManager が唯一の持ち主）
-    private int detailPartyIndex;   // -1 or 0.. (カード側の partyIndex)
-    private int detailIndex;        // 現在表示中
-    private int detailTotal;
+    // =========================
+    // ★ Replace（入れ替え）状態（Managerのみが保持）
+    // =========================
+    private ReplaceState replaceState = ReplaceState.None;
+    private OwnedMonster replaceCandidate;          // 候補（所持側）
+    private int replaceCandidateOwnedIndex = -1;    // 所持リストでのIndex（ハイライト復元用）
 
-    private Func<int, OwnedMonster> detailGetter;
+    // =========================
+    // 詳細画面用の状態（PartyEditManager が唯一の持ち主）
+    // =========================
+    private int detailPartyIndex;   // -1: 所持リスト, 0..: パーティ
+    private int detailIndex;
+    private int detailTotal;
 
     private void Start()
     {
         state = PartyEditState.LIST;
 
         AudioManager.Instance.PlayHomeBGM();
-        popupObj.gameObject.SetActive(false);
+        popup.Setup();
 
-        // ★ 閉じた時に呼ばれるコールバックを渡す
+        // 詳細画面クローズ通知
         monsterDetailDataView.Setup(OnDetailClosed);
 
         var ctx = GameContext.Instance;
         if (ctx != null)
         {
-            inventoryMonsters = ctx.inventory; // 参照コピー
-            partyDatas        = ctx.partyList; // 参照コピー
+            inventoryMonsters = ctx.inventory;
+            partyDatas = ctx.partyList;
             currentPartyIndex = ctx.CurrentPartyIndex;
         }
         else
@@ -76,12 +91,15 @@ public class PartyEditManager : MonoBehaviour
 
         for (int i = 0; i < partyDataSize; i++)
         {
-            partyDataSlots[i].Setup(RefreshOwnedMonsterListView, OnMonsterCardViewLongPressed);
+            // ★ PartyDataViewは “slotクリック通知” だけを上げる
+            partyDataSlots[i].Setup(
+                OnMonsterCardViewLongPressed,
+                OnPartySlotClicked
+            );
         }
 
         RefreshAllView();
     }
-
 
     private void ChangeState(PartyEditState newState)
     {
@@ -104,15 +122,32 @@ public class PartyEditManager : MonoBehaviour
     }
 
     /// <summary>
-    /// PartySwipePager が GameContext.CurrentPartyIndex を更新する前提で、
-    /// ここからローカルの currentPartyIndex を同期する。
+    /// PartySwipePager が GameContext.CurrentPartyIndex を更新する前提で同期
     /// </summary>
     private void SyncPartyIndexFromContext()
     {
         var ctx = GameContext.Instance;
         if (ctx == null) return;
-
         currentPartyIndex = ctx.CurrentPartyIndex;
+    }
+
+    // ================================
+    // Replace（入れ替え）制御
+    // ================================
+    private void SetPartyMonsterCardReplaceState(bool enable)
+    {
+        // 今の実装は中央（current party）だけ入れ替え対象にする
+        partyDataSlots[1].SetReplaceState(enable);
+    }
+
+    private void CancelReplace()
+    {
+        replaceState = ReplaceState.None;
+        replaceCandidate = null;
+        replaceCandidateOwnedIndex = -1;
+
+        popup.SetReplacePopup(false);
+        SetPartyMonsterCardReplaceState(false);
     }
 
     // ================================
@@ -134,62 +169,221 @@ public class PartyEditManager : MonoBehaviour
         for (int i = 0; i < inventoryMonsters.ownedMonsters.Count; i++)
         {
             var owned = inventoryMonsters.ownedMonsters[i];
-            var item  = Instantiate(listItemPrefab, listContentParent);
+            var item = Instantiate(listItemPrefab, listContentParent);
 
-            // 一覧のカードを押したらパーティに入れる
-            item.Setup(owned, -1, OnOwnedMonsterClicked, OnMonsterCardViewLongPressed, OnPartyRemoveButtonClicked);
+            // 一覧のカード
+            item.Setup(
+                owned,
+                -1,
+                OnOwnedMonsterClicked,          // タップ
+                OnMonsterCardViewLongPressed,   // 長押し
+                OnPartyRemoveButtonClicked      // 「はずす」（isPartyのとき）
+            );
             item.SetCardIndex(i);
-        }
-    }
 
-    // 一覧から選択された（パーティに追加）
-    private void OnOwnedMonsterClicked(MonsterCardView card)
-    {
-        Debug.Log($"OnOwnedMonsterClicked PartyEditManager");
-        var monster = card.GetOwnedMonsterData();
-        if (monster == null) return;
+            // ★ 候補のハイライト復元
+            bool isCandidate =
+                (i == replaceCandidateOwnedIndex) &&
+                (replaceState == ReplaceState.CandidateSelected ||
+                 replaceState == ReplaceState.SelectingTarget);
 
-        if (!monster.isParty)
-        {
-            // 空きスロットを探す
-            var members = partyDatas[currentPartyIndex].members;
-            for (int i = 0; i < partySize; i++)
+            if (isCandidate)
             {
-                if (members[i] == null)
+                if (replaceState == ReplaceState.CandidateSelected)
                 {
-                    members[i]    = monster;
-                    monster.isParty = true;
-
-                    RefreshPartyDataView();
-                    // カード表示も更新（isParty フラグなど反映させたい場合）
-                    card.Setup(monster, -1, OnOwnedMonsterClicked, OnMonsterCardViewLongPressed, OnPartyRemoveButtonClicked);
-                    return;
+                    // 「入れ替え」ボタンを出す
+                    item.SetReplaceState(
+                        isSelected: true,
+                        isOwnedList: true,
+                        onReplace: OnOwnedReplaceButtonClicked,
+                        showButton: true
+                    );
                 }
+                else
+                {
+                    // ★ SelectingTarget：ハイライトだけ（ボタンは消す）
+                    item.SetReplaceState(
+                        isSelected: true,
+                        isOwnedList: true,
+                        onReplace: null,
+                        showButton: false
+                    );
+                }
+            }
+            else
+            {
+                item.SetReplaceState(false);
             }
         }
     }
 
-    private void OnPartyRemoveButtonClicked(MonsterCardView card)
+    /// <summary>
+    /// 所持カードタップ
+    /// </summary>
+    private void OnOwnedMonsterClicked(MonsterCardView card)
     {
-        Debug.Log($"OnPartyRemoveButtonClicked PartyEditManager");
+        var monster = card.GetOwnedMonsterData();
+        if (monster == null) return;
 
-        // 念のためパーティインデックスを同期（スワイプ直後などを想定）
+        // 念のためパーティインデックス同期
         SyncPartyIndexFromContext();
 
-        // パーティスロット側で、該当モンスターを外す処理をしている想定
-        partyDataSlots[1].OnPartyRemoveButtonClicked(card);
+        var members = partyDatas[currentPartyIndex].members;
 
-        // 所持リスト & 上部表示を更新
-        RefreshPartyDataView();
+        // ★ まず重複防止：現在のパーティに既にいるなら何もしない（or 違う挙動にする）
+        for (int i = 0; i < partySize; i++)
+        {
+            if (members[i] == monster)
+            {
+                // ここで「候補選択にする」等もできるが、まずは二重追加を確実に防ぐ
+                return;
+            }
+        }
+
+        // =========================================
+        // 入れ替え対象選択中
+        // =========================================
+        if (replaceState == ReplaceState.SelectingTarget)
+        {
+            // 自分（現在の候補）をタップ → 完全キャンセル
+            if (card.Index == replaceCandidateOwnedIndex)
+            {
+                CancelReplace();
+                RefreshPartyDataView();
+                RefreshOwnedMonsterListView();
+                return;
+            }
+
+            // ★ 別の所持モンスターをタップ
+            // → 対象選択をやめて「候補選択」に戻る
+            replaceState = ReplaceState.CandidateSelected;
+            replaceCandidate = monster;
+            replaceCandidateOwnedIndex = card.Index;
+
+            // パーティ側の「入れ替え対象」表示を消す
+            popup.SetReplacePopup(false);
+            SetPartyMonsterCardReplaceState(false);
+
+            // 所持リストを更新（ハイライト＋入れ替えボタン表示）
+            RefreshOwnedMonsterListView();
+            return;
+        }
+
+        // 空きがあれば即追加（従来通り）
+        for (int i = 0; i < partySize; i++)
+        {
+            if (members[i] == null)
+            {
+                members[i] = monster;
+                monster.isParty = true;
+
+                RefreshAllView();
+                return;
+            }
+        }
+
+        // 空きがない → 候補選択（ボタン待ち）
+        replaceState = ReplaceState.CandidateSelected;
+        replaceCandidate = monster;
+        replaceCandidateOwnedIndex = card.Index;
+
+        RefreshOwnedMonsterListView();
+    }
+
+    /// <summary>
+    /// 候補カード内の「入れ替え」ボタンが押された
+    /// → 入れ替え先選択へ
+    /// </summary>
+    private void OnOwnedReplaceButtonClicked(MonsterCardView card)
+    {
+        if (replaceCandidate == null)
+        {
+            CancelReplace();
+            RefreshAllView();
+            return;
+        }
+
+        replaceState = ReplaceState.SelectingTarget;
+
+        popup.SetReplacePopup(true);
+        SetPartyMonsterCardReplaceState(true);
+
+        // ★ ボタンを消してハイライトだけにするためにリスト更新
         RefreshOwnedMonsterListView();
     }
 
     // ================================
     // 上部のパーティ 3 枚
     // ================================
+    private void OnPartySlotClicked(int slotIndex)
+    {
+        // 念のため同期
+        SyncPartyIndexFromContext();
+
+        var members = partyDatas[currentPartyIndex].members;
+
+        // 入れ替え先選択中でなければ通常挙動（タップで外す）
+        if (replaceState != ReplaceState.SelectingTarget)
+        {
+            if (members[slotIndex] != null)
+            {
+                members[slotIndex].isParty = false;
+                members[slotIndex] = null;
+                RefreshAllView();
+            }
+            return;
+        }
+
+        // 入れ替え確定
+        if (replaceCandidate == null)
+        {
+            CancelReplace();
+            RefreshAllView();
+            return;
+        }
+
+        var prev = members[slotIndex];
+        if (prev != null) prev.isParty = false;
+
+        members[slotIndex] = replaceCandidate;
+        replaceCandidate.isParty = true;
+
+        CancelReplace();
+        RefreshAllView();
+    }
+
+    private void OnPartyRemoveButtonClicked(MonsterCardView card)
+    {
+        SyncPartyIndexFromContext();
+
+        var monster = card.GetOwnedMonsterData();
+        if (monster == null) return;
+
+        var members = partyDatas[currentPartyIndex].members;
+        for (int i = 0; i < partySize; i++)
+        {
+            if (members[i] == monster)
+            {
+                members[i] = null;
+                monster.isParty = false;
+                break;
+            }
+        }
+
+        // 入れ替え候補を外したらキャンセル
+        if (replaceCandidate == monster)
+        {
+            CancelReplace();
+        }
+
+        RefreshAllView();
+    }
+
+    // ================================
+    // 上部パーティ表示更新
+    // ================================
     private void RefreshPartyDataView()
     {
-        // PartySwipePager によって GameContext.CurrentPartyIndex が変わっている可能性があるので同期
         SyncPartyIndexFromContext();
 
         if (partyDatas == null || partyDatas.Length == 0)
@@ -198,7 +392,7 @@ public class PartyEditManager : MonoBehaviour
             return;
         }
 
-        int leftPartyDataSlotIndex  = currentPartyIndex - 1;
+        int leftPartyDataSlotIndex = currentPartyIndex - 1;
         int rightPartyDataSlotIndex = currentPartyIndex + 1;
 
         if (leftPartyDataSlotIndex < 0)
@@ -207,16 +401,53 @@ public class PartyEditManager : MonoBehaviour
         if (rightPartyDataSlotIndex >= partyDatas.Length)
             rightPartyDataSlotIndex = 0;
 
-        partyDataSlots[0].RefreshPartyData(partyDatas[leftPartyDataSlotIndex],  false);
+        partyDataSlots[0].RefreshPartyData(partyDatas[leftPartyDataSlotIndex], false);
         partyDataSlots[2].RefreshPartyData(partyDatas[rightPartyDataSlotIndex], false);
-        partyDataSlots[1].RefreshPartyData(partyDatas[currentPartyIndex],       true);
+        partyDataSlots[1].RefreshPartyData(partyDatas[currentPartyIndex], true);
+
+        // Replace中ならパーティ側ハイライト復元
+        if (replaceState == ReplaceState.SelectingTarget)
+            SetPartyMonsterCardReplaceState(true);
+        else
+            SetPartyMonsterCardReplaceState(false);
 
         SetPartyPointer();
         partySwipePager.SetPagePosition();
     }
 
+    private void RebuildIsPartyFlags()
+    {
+        if (inventoryMonsters?.ownedMonsters == null) return;
+
+        // いったん全員 false
+        for (int i = 0; i < inventoryMonsters.ownedMonsters.Count; i++)
+        {
+            var m = inventoryMonsters.ownedMonsters[i];
+            if (m != null) m.isParty = false;
+        }
+
+        // ★ 現在選択中パーティだけ true
+        var members = partyDatas[currentPartyIndex].members;
+        if (members == null) return;
+
+        for (int i = 0; i < members.Length; i++)
+        {
+            var m = members[i];
+            if (m != null) m.isParty = true;
+        }
+    }
+
     private void RefreshAllView()
     {
+        SyncPartyIndexFromContext();
+
+        // ★ これが肝：スワイプ含め、どのタイミングでも整合する
+        RebuildIsPartyFlags();
+        if (replaceState != ReplaceState.None)
+        {
+            CancelReplace(); // popup OFF / パーティ対象OFF / 候補クリア
+        }
+
         RefreshPartyDataView();
         RefreshOwnedMonsterListView();
     }
@@ -232,77 +463,13 @@ public class PartyEditManager : MonoBehaviour
     // ================================
     // 詳細画面（3D表示用）
     // ================================
-
-    // インデックスを 0 ～ count-1 の範囲に丸める（-1 → 最後、count → 0）
     private int WrapIndex(int index, int count)
     {
         if (count <= 0) return 0;
-
         index %= count;
-        if (index < 0)
-            index += count;
-
+        if (index < 0) index += count;
         return index;
     }
-
-    /// <summary>
-    /// 詳細画面の内容を更新（初回表示・スワイプ更新どちらも）
-    /// </summary>
-    // private void UpdateMonsterDetail(int cardIndex, int partyIndex)
-    // {
-    //     int currentIndex;
-    //     int prevIndex;
-    //     int nextIndex;
-
-    //     // ========== インベントリ側 ==========
-    //     if (partyIndex == -1)
-    //     {
-    //         int monsterNum = inventoryMonsters.ownedMonsters.Count;
-    //         if (monsterNum == 0)
-    //         {
-    //             Debug.LogWarning("No monsters in inventory.");
-    //             return;
-    //         }
-
-    //         currentIndex = WrapIndex(cardIndex, monsterNum);
-    //         prevIndex    = WrapIndex(currentIndex - 1, monsterNum);
-    //         nextIndex    = WrapIndex(currentIndex + 1, monsterNum);
-
-    //         monsterDetailDataView.ShowInitial(
-    //             inventoryMonsters.ownedMonsters[currentIndex],
-    //             currentIndex,
-    //             monsterNum,
-    //             inventoryMonsters.ownedMonsters[prevIndex],
-    //             inventoryMonsters.ownedMonsters[nextIndex]
-    //         );
-    //     }
-    //     // ========== パーティ側 ==========
-    //     else
-    //     {
-    //         SyncPartyIndexFromContext();
-    //         var members = partyDatas[currentPartyIndex].members;
-    //         int memberCount = members.Length; // 想定: 3
-
-    //         if (memberCount == 0)
-    //         {
-    //             Debug.LogWarning("No members in party.");
-    //             return;
-    //         }
-
-    //         currentIndex = WrapIndex(cardIndex, memberCount);
-    //         prevIndex    = WrapIndex(currentIndex - 1, memberCount);
-    //         nextIndex    = WrapIndex(currentIndex + 1, memberCount);
-
-    //         monsterDetailDataView.ShowInitial(
-    //             members[currentIndex],
-    //             currentIndex,
-    //             memberCount,
-    //             members[prevIndex],
-    //             members[nextIndex]
-    //         );
-    //     }
-    //     detailSwipePager.SetPagePosition();
-    // }
 
     private OwnedMonster GetDetailMonster(int i)
     {
@@ -331,7 +498,7 @@ public class PartyEditManager : MonoBehaviour
         detailIndex = WrapIndex(startIndex, detailTotal);
 
         var prev = GetDetailMonster(WrapIndex(detailIndex - 1, detailTotal));
-        var cur  = GetDetailMonster(detailIndex);
+        var cur = GetDetailMonster(detailIndex);
         var next = GetDetailMonster(WrapIndex(detailIndex + 1, detailTotal));
 
         monsterDetailDataView.ShowInitial(prev, cur, next, detailIndex, detailTotal);
@@ -339,7 +506,6 @@ public class PartyEditManager : MonoBehaviour
         detailSwipePager.Setup(OnDetailSwiped, OnSwipeEnd);
         detailSwipePager.SetPagePosition();
     }
-
 
     private void OnDetailSwiped(int direction)
     {
@@ -350,12 +516,11 @@ public class PartyEditManager : MonoBehaviour
         int nextIndex = WrapIndex(detailIndex + direction, detailTotal);
 
         var prev = GetDetailMonster(WrapIndex(nextIndex - 1, detailTotal));
-        var cur  = GetDetailMonster(nextIndex);
+        var cur = GetDetailMonster(nextIndex);
         var next = GetDetailMonster(WrapIndex(nextIndex + 1, detailTotal));
 
         monsterDetailDataView.PlaySwap(direction, prev, cur, next, nextIndex, detailTotal);
 
-        // 状態更新
         detailIndex = nextIndex;
     }
 
@@ -369,12 +534,8 @@ public class PartyEditManager : MonoBehaviour
         OpenDetail(card.Index, card.PartyIndex);
     }
 
-    /// <summary>
-    /// 詳細画面が閉じられたときに呼ばれる
-    /// </summary>
     private void OnDetailClosed()
     {
-        // 状態を LIST に戻して、上部パーティ & 所持リストを再表示
         ChangeState(PartyEditState.LIST);
         RefreshAllView();
     }
@@ -384,35 +545,20 @@ public class PartyEditManager : MonoBehaviour
     // ================================
     public void OnClickOk()
     {
-        // パーティが空か判定（中央のスロット）
         if (partyDataSlots[1].IsEmptyParty())
         {
-            StartCoroutine(ShowPopup());
+            StartCoroutine(popup.ShowErrorPopup());
             return;
         }
-
-        Debug.Log("パーティ決定！");
 
         var ctx = GameContext.Instance;
         if (ctx != null)
         {
-            // 現在のパーティ番号を反映（ほぼ同じはずだが、念のため）
             ctx.CurrentPartyIndex = currentPartyIndex;
-            // 便利関数として現在パーティを渡しておく
             ctx.SetCurrentParty(partyDatas[currentPartyIndex].members);
-            // 必要ならここで SaveGame()
-            // ctx.SaveGame();
         }
 
         AudioManager.Instance.PlayButtonSE();
         SceneManager.LoadScene("HomeScene");
-    }
-
-    private IEnumerator ShowPopup()
-    {
-        Debug.Log("パーティメンバーがいません");
-        popupObj.gameObject.SetActive(true);
-        yield return new WaitForSeconds(2f);
-        popupObj.gameObject.SetActive(false);
     }
 }

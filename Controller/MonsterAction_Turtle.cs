@@ -233,4 +233,10 @@ public class MonsterAction_Turtle : MonsterActionBase
 
         selfController.OnAttackEnd();
     }
+
+    public void OnMove()
+    {
+        AudioManager.Instance.PlaySE(moveSE);
+        Debug.Log("OnMove");
+    }
 }
