@@ -9,21 +9,26 @@ public class PartyDataView : MonoBehaviour
     [SerializeField] private int partySize = 3;
 
     [Header("UI - Party")]
-    [SerializeField] private MonsterCardView[] partySlots; // 上の3枚
+    [SerializeField] private MonsterCardView[] partySlots;
     [SerializeField] private TextMeshProUGUI partyNameText;
     [SerializeField] private TextMeshProUGUI teamHpText;
     [SerializeField] private Image viewFrame;
 
     private PartyData partyData;
     private bool isCurrentParty;
-    private Action onRefresh;
+
+    // 長押しはPartyEditManagerへ（詳細表示）
     private Action<MonsterCardView> onMonsterCardViewLongPressed;
 
-    public void Setup(Action onRefresh, Action<MonsterCardView> onMonsterCardViewLongPressed)
+    // ★ slotタップ通知（PartyEditManagerへ）
+    private Action<int> onPartySlotClicked;
+
+    public void Setup(
+        Action<MonsterCardView> onMonsterCardViewLongPressed,
+        Action<int> onPartySlotClicked)
     {
-        partyData = new PartyData();
-        this.onRefresh = onRefresh;
         this.onMonsterCardViewLongPressed = onMonsterCardViewLongPressed;
+        this.onPartySlotClicked = onPartySlotClicked;
     }
 
     public void RefreshPartyData(PartyData partyData, bool isCurrentParty)
@@ -35,63 +40,53 @@ public class PartyDataView : MonoBehaviour
 
         for (int i = 0; i < partySize; i++)
         {
-            // 上のスロットにも MonsterCardView を使う
             var monster = partyData.members[i];
-            partySlots[i].Setup(monster, i, OnPartyMonsterClicked, onMonsterCardViewLongPressed); // 上はクリック無効なら null
+
+            // ★ onClicked は PartyDataView 内のハンドラにして、slotIndex を上に通知
+            partySlots[i].Setup(monster, i, OnPartyMonsterClicked, onMonsterCardViewLongPressed);
             partySlots[i].SetCardIndex(i);
-            if (monster != null) {
+
+            if (monster != null)
+            {
                 totalHp += monster.hp;
-                monster.isParty = isCurrentParty ?  true : false;
+
+                // ※本当はManagerだけで管理したいが、現状のUI（所持側の「パーティーメンバー」表示）
+                // を維持するために踏襲。将来的には partyId/slotIndex 化推奨。
+                monster.isParty = isCurrentParty ? true : monster.isParty;
             }
         }
 
         partyNameText.text = partyData.partyName;
-        teamHpText.text    = totalHp.ToString();
+        teamHpText.text = totalHp.ToString();
         viewFrame.gameObject.SetActive(isCurrentParty);
+    }
+
+    public void SetReplaceState(bool enable)
+    {
+        for (int i = 0; i < partySize; i++)
+        {
+            if (partyData.members[i] != null)
+            {
+                partySlots[i].SetReplaceState(enable);
+            }
+        }
     }
 
     public bool IsEmptyParty()
     {
         for (int i = 0; i < partySize; i++)
         {
-            if (partyData.members[i] != null)
-            {
-                return false;
-            }
+            if (partyData.members[i] != null) return false;
         }
         return true;
     }
 
-    public void OnPartyRemoveButtonClicked(MonsterCardView card)
-    {
-        Debug.Log($"OnPartyRemoveButtonClicked dataview: {card.GetOwnedMonsterData().Name}");
-        for (int i = 0; i < partySize; i++)
-        {
-            Debug.Log($"OnPartyRemoveButtonClicked {i}");
-            if (partyData.members[i] == card.GetOwnedMonsterData())
-            {
-                partyData.members[i] = null;
-                card.SetIsParty(false);
-                RefreshPartyData(partyData, isCurrentParty);
-                onRefresh?.Invoke();
-                return;
-            }
-        }
-    }
-
-    // 一覧から選択された
     private void OnPartyMonsterClicked(MonsterCardView card)
     {
-        if (!isCurrentParty || card.GetOwnedMonsterData() == null) {
-            return;
-        }
-        Debug.Log("OnClick Card");
-        partyData.members[card.PartyIndex] = null;
-        card.SetIsParty(false);
-        RefreshPartyData(partyData, isCurrentParty);
-        onRefresh?.Invoke();
+        if (!isCurrentParty) return;
+        onPartySlotClicked?.Invoke(card.PartyIndex);
+        // 必要なら onRefresh?.Invoke();（いまはManager側で RefreshAllView する想定）
     }
-
 
     private void OnClickPartyName()
     {
