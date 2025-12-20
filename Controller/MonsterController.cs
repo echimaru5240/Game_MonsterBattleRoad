@@ -1,6 +1,7 @@
 using UnityEngine;
 using System.Collections;
 using System.Collections.Generic;
+using DG.Tweening;
 
 public class MonsterController : MonoBehaviour
 {
@@ -114,13 +115,22 @@ public class MonsterController : MonoBehaviour
     /// <summary>
     /// 被弾アニメーション＋カメラ演出
     /// </summary>
-    private void PlayLastHit(BattleCalculator.ActionResult result)
+    private void PlayLastHit(BattleCalculator.ActionResult result, bool battleEnd)
     {
         if (result.IsDamage) {
             if (!result.IsMiss) {
-                if (result.IsCritical) AudioManager.Instance.PlayCriticalSE();
+                if (result.IsCritical)
+                {
+                    AudioManager.Instance.PlayCriticalSE();
+                    CameraManager.Instance.ShakeCritical();
+                }
                 if (animator != null)
                 {
+                    if (battleEnd)
+                    {
+                        Time.timeScale = 0.2f;
+                        DOTween.PlayAll();
+                    }
                     // 吹き飛び演出
                     animator.SetTrigger("DoLastHit");
                     StartCoroutine(Knockback());
@@ -140,7 +150,7 @@ public class MonsterController : MonoBehaviour
     /// <summary>
     /// 攻撃を受けた時に吹き飛ぶ演出
     /// </summary>
-    private IEnumerator Knockback(float power = 3f, float duration = 0.3f)
+    private IEnumerator Knockback(float power = 6f, float duration = 0.5f)
     {
         Vector3 start = transform.position;
 
@@ -182,11 +192,11 @@ public class MonsterController : MonoBehaviour
     /// <summary>
     /// 戦闘勝利モーション
     /// </summary>
-    public void PlayResultWin(bool isResult)
+    public void PlayResult(int battleResult)
     {
         if (animator != null)
         {
-            animator.SetBool("IsResult", isResult);
+            animator.SetInteger("BattleResult", battleResult);
         }
     }
 
@@ -199,7 +209,7 @@ public class MonsterController : MonoBehaviour
         {
             result.Target.PlayHit(result); // ← 自分を渡すことで方向が決まる
         }
-        Debug.Log("OnAttackHit");
+        // Debug.Log("OnAttackHit");
     }
 
     /// <summary>
@@ -207,12 +217,12 @@ public class MonsterController : MonoBehaviour
     /// </summary>
     public void OnAttackLastHit()
     {
-        BattleCalculator.ApplyActionResults(currentActionResults);
+        bool battleEnd = BattleCalculator.ApplyActionResults(currentActionResults);
         foreach (var result in currentActionResults)
         {
-            result.Target.PlayLastHit(result); // ← 自分を渡すことで方向が決まる
+            result.Target.PlayLastHit(result, battleEnd); // ← 自分を渡すことで方向が決まる
         }
-        Debug.Log("OnAttackLastHit");
+        // Debug.Log("OnAttackLastHit");
     }
 
     /// <summary>
@@ -222,6 +232,6 @@ public class MonsterController : MonoBehaviour
     public void OnAttackEnd()
     {
         fAttackEnd = true; // ← フラグONでPerformActionが再開
-        Debug.Log("OnAttackEnd");
+        // Debug.Log("OnAttackEnd");
     }
 }

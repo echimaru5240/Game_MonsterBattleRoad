@@ -75,7 +75,10 @@ public class MonsterAction_Turtle : MonsterActionBase
         {
             selfController.transform.rotation = Quaternion.LookRotation(dir);
         }
-        CameraManager.Instance.SwitchToFixedBackCamera(target.transform, selfController.isPlayer);
+
+        Vector3 offset = new Vector3(1f, 2f, currentActionResults[0].Target.isPlayer ? -10f : 10f); // ここは好きな位置
+        CameraManager.Instance.CutAction_Follow(currentActionResults[0].Target.transform, offset);
+
         // 3. 頭上にファイアーボール生成
         Vector3 spawnPos = selfController.transform.position + Vector3.forward * 6f + Vector3.up * 1f;
         EffectManager.Instance.PlayEffectByID(beamEffect, spawnPos, Quaternion.Euler(0f, 0f, 0f));
@@ -104,7 +107,11 @@ public class MonsterAction_Turtle : MonsterActionBase
         {
             selfController.transform.rotation = Quaternion.LookRotation(dir);
         }
-        CameraManager.Instance.SwitchToFixedBackCamera(target.transform, selfController.isPlayer);
+
+        Vector3 offset = new Vector3(1f, 2f, currentActionResults[0].Target.isPlayer ? -10f : 10f); // ここは好きな位置
+        CameraManager.Instance.CutAction_Follow(currentActionResults[0].Target.transform, offset);
+
+
         anim.SetTrigger("DoCast");
     }
 

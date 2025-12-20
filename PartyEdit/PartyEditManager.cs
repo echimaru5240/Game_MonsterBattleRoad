@@ -184,31 +184,17 @@ public class PartyEditManager : MonoBehaviour
             // ★ 候補のハイライト復元
             bool isCandidate =
                 (i == replaceCandidateOwnedIndex) &&
-                (replaceState == ReplaceState.CandidateSelected ||
-                 replaceState == ReplaceState.SelectingTarget);
+                (replaceState == ReplaceState.SelectingTarget);
 
             if (isCandidate)
             {
-                if (replaceState == ReplaceState.CandidateSelected)
-                {
-                    // 「入れ替え」ボタンを出す
-                    item.SetReplaceState(
-                        isSelected: true,
-                        isOwnedList: true,
-                        onReplace: OnOwnedReplaceButtonClicked,
-                        showButton: true
-                    );
-                }
-                else
-                {
-                    // ★ SelectingTarget：ハイライトだけ（ボタンは消す）
-                    item.SetReplaceState(
-                        isSelected: true,
-                        isOwnedList: true,
-                        onReplace: null,
-                        showButton: false
-                    );
-                }
+                // ★ SelectingTarget：ハイライトだけ（ボタンは消す）
+                item.SetReplaceState(
+                    isSelected: true,
+                    isOwnedList: true,
+                    onReplace: null,
+                    showButton: false
+                );
             }
             else
             {
@@ -254,17 +240,14 @@ public class PartyEditManager : MonoBehaviour
                 return;
             }
 
-            // ★ 別の所持モンスターをタップ
-            // → 対象選択をやめて「候補選択」に戻る
-            replaceState = ReplaceState.CandidateSelected;
+            // ★ 別の所持モンスターをタップ → 候補を差し替え（SelectingTarget継続）
             replaceCandidate = monster;
             replaceCandidateOwnedIndex = card.Index;
 
-            // パーティ側の「入れ替え対象」表示を消す
-            popup.SetReplacePopup(false);
-            SetPartyMonsterCardReplaceState(false);
+            // popup/パーティ側ハイライトは維持
+            popup.SetReplacePopup(true);
+            SetPartyMonsterCardReplaceState(true);
 
-            // 所持リストを更新（ハイライト＋入れ替えボタン表示）
             RefreshOwnedMonsterListView();
             return;
         }
@@ -276,18 +259,24 @@ public class PartyEditManager : MonoBehaviour
             {
                 members[i] = monster;
                 monster.isParty = true;
+                AudioManager.Instance.PlayPartyEnterSE();
 
                 RefreshAllView();
                 return;
             }
         }
 
-        // 空きがない → 候補選択（ボタン待ち）
-        replaceState = ReplaceState.CandidateSelected;
+        // 空きがない → ★即 入れ替え先選択へ
+        replaceState = ReplaceState.SelectingTarget;
         replaceCandidate = monster;
         replaceCandidateOwnedIndex = card.Index;
 
+        popup.SetReplacePopup(true);
+        SetPartyMonsterCardReplaceState(true);
+
+        RefreshPartyDataView();
         RefreshOwnedMonsterListView();
+        return;
     }
 
     /// <summary>
@@ -329,6 +318,7 @@ public class PartyEditManager : MonoBehaviour
             {
                 members[slotIndex].isParty = false;
                 members[slotIndex] = null;
+                AudioManager.Instance.PlayPartyRemoveSE();
                 RefreshAllView();
             }
             return;
@@ -347,6 +337,7 @@ public class PartyEditManager : MonoBehaviour
 
         members[slotIndex] = replaceCandidate;
         replaceCandidate.isParty = true;
+        AudioManager.Instance.PlayPartyEnterSE();
 
         CancelReplace();
         RefreshAllView();
@@ -366,6 +357,7 @@ public class PartyEditManager : MonoBehaviour
             {
                 members[i] = null;
                 monster.isParty = false;
+                AudioManager.Instance.PlayPartyRemoveSE();
                 break;
             }
         }

@@ -28,6 +28,8 @@ public class AudioManager : MonoBehaviour
     public AudioClip executeSkillSE;
     public AudioClip courageMaxSE;
     public AudioClip criticalSE;
+    public AudioClip partyEnterSE;
+    public AudioClip partyRemoveSE;
 
     [Header("個別SE登録")]
     [SerializeField] private List<SoundEffectIDData> seDataList = new List<SoundEffectIDData>();
@@ -64,7 +66,7 @@ public class AudioManager : MonoBehaviour
         // 辞書へ変換
         foreach (var data in seDataList)
         {
-            Debug.Log($"オーディオデータ:{data.actionSE}");
+            // Debug.Log($"オーディオデータ:{data.actionSE}");
             if (!seDictionary.ContainsKey(data.actionSE) && data.clip != null)
                 seDictionary.Add(data.actionSE, data.clip);
         }
@@ -156,4 +158,6 @@ public class AudioManager : MonoBehaviour
     public void PlayExecuteSkillSE() => PlaySE(executeSkillSE);
     public void PlayCourageMaxSE() => PlaySE(courageMaxSE);
     public void PlayCriticalSE() => PlaySE(criticalSE);
+    public void PlayPartyEnterSE() => PlaySE(partyEnterSE);
+    public void PlayPartyRemoveSE() => PlaySE(partyRemoveSE);
 }

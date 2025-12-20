@@ -75,7 +75,10 @@ public class MonsterAction_Beholder : MonsterActionBase
         {
             selfController.transform.rotation = Quaternion.LookRotation(dir);
         }
-        CameraManager.Instance.SwitchToFixedBackCamera(target.transform, selfController.isPlayer);
+
+        Vector3 offset = new Vector3(1f, 2f, currentActionResults[0].Target.isPlayer ? -6f : 6f); // ここは好きな位置
+        CameraManager.Instance.CutAction_Follow(currentActionResults[0].Target.transform, offset);
+
         // 3. 頭上にファイアーボール生成
         anim.SetBool("IsBeam", true);
         Vector3 spawnPos = selfController.transform.position
@@ -108,7 +111,11 @@ public class MonsterAction_Beholder : MonsterActionBase
         {
             selfController.transform.rotation = Quaternion.LookRotation(dir);
         }
-        CameraManager.Instance.SwitchToFixedBackCamera(target.transform, selfController.isPlayer);
+
+        Vector3 offset = new Vector3(1f, 2f, currentActionResults[0].Target.isPlayer ? -6f : 6f); // ここは好きな位置
+        CameraManager.Instance.CutAction_Follow(currentActionResults[0].Target.transform, offset);
+
+
         anim.SetTrigger("DoCast");
     }
 
@@ -237,4 +244,14 @@ public class MonsterAction_Beholder : MonsterActionBase
 
         selfController.OnAttackEnd();
     }
+
+    /// <summary>
+    /// 動く瞬間（アニメーションイベントで呼ばれる）
+    /// </summary>
+    public void OnMove()
+    {
+        AudioManager.Instance.PlaySE(moveSE);
+        Debug.Log("OnMove");
+    }
+
 }

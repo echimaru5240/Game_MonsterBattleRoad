@@ -69,7 +69,15 @@ public class MonsterAction_MushRoom : MonsterActionBase
 
         Sequence seq = DOTween.Sequence();
         seq.AppendCallback(() => {
-            CameraManager.Instance.SwitchToFixedBackCamera(selfController.transform, selfController.isPlayer);
+            // CameraManager.Instance.SwitchToFixedBackCamera(selfController.transform, selfController.isPlayer);
+
+            Vector3 fixedPos = new Vector3(-8f, 2f, selfController.isPlayer ? 13f : -13f); // ここは好きな位置
+            CameraManager.Instance.CutAction_FixedWorldLookOnly(
+                fixedPos,
+                selfController.transform,
+                lookAtHeight: 1.2f,
+                fov: 45f
+            );
         });
 
         // 攻撃の余韻時間（砂煙などを出すならここ）
@@ -87,7 +95,7 @@ public class MonsterAction_MushRoom : MonsterActionBase
             .SetEase(Ease.OutQuad));
 
         // 落下
-        seq.Append(selfController.transform.DOMove(targetPos, jumpDuration)
+        seq.Append(selfController.transform.DOMove(targetPos, jumpDuration*0.8f)
             .SetEase(Ease.InCirc));
 
 
@@ -174,4 +182,12 @@ public class MonsterAction_MushRoom : MonsterActionBase
         Debug.Log("OnAction_Heal");
     }
 
+    /// <summary>
+    /// 動く瞬間（アニメーションイベントで呼ばれる）
+    /// </summary>
+    public void OnMove()
+    {
+        AudioManager.Instance.PlaySE(moveSE);
+        Debug.Log("OnMove");
+    }
 }

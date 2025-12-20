@@ -1,260 +1,431 @@
 using UnityEngine;
 using Unity.Cinemachine;
-using System.Collections;
 using DG.Tweening;
 
-/// <summary>
-/// バトル中のカメラ制御（Cinemachine v3対応）
-/// </summary>
+[System.Serializable]
+public struct FollowShot
+{
+    public float yawDeg;        // 0=正面, +右, -左
+    public float pitchDeg;      // +見下ろし, -見上げ
+    public float distance;      // 距離
+    public float lookAtHeight;  // 注視点の高さ（顔あたり）
+    public float fov;
+}
+
 public class CameraManager : MonoBehaviour
 {
     public static CameraManager Instance { get; private set; }
 
-    [Header("Cameras")]
-    [Tooltip("全体を俯瞰で映すカメラ")]
-    public CinemachineCamera overviewCamera;
+    [Header("Cameras (4)")]
+    [SerializeField] private CinemachineCamera overviewCamera;
+    [SerializeField] private CinemachineCamera orbitCamera;
+    [SerializeField] private CinemachineCamera actionCamera;
+    [SerializeField] private CinemachineCamera resultCamera;
 
-    [Tooltip("全体を回転して映すカメラ")]
-    public CinemachineCamera orbitCamera;
-    public Transform centerPos;
-    private CinemachineOrbitalFollow orbitalFollow;
+    [Header("Brain Blend")]
+    [SerializeField] private float easeBlendTime = 0.3f;
+
+    [SerializeField] private CinemachineImpulseSource criticalImpulse;
+
+    // Orbit
+    [Header("Orbit")]
+    [SerializeField] private Transform centerPos;
+    [SerializeField] private float orbitSecondsPerRound = 10f;
+
+    private CinemachineOrbitalFollow orbitOrbitalFollow;
     private Tween orbitTween;
 
-    [Tooltip("攻撃キャラを映すアクションカメラ")]
-    public CinemachineCamera playerActionCameraFront;
-    public CinemachineCamera playerActionCameraBack;
-    public CinemachineCamera FixCamera_m2_13;
-    public CinemachineCamera FixCamera_m8_13;
-    public CinemachineCamera enemyActionCameraFront;
-    public CinemachineCamera enemyActionCameraBack;
-    public CinemachineCamera FixCamera_m2_m13;
-    public CinemachineCamera FixCamera_m8_m13;
+    // Action rigs
+    [Header("Action Rigs (auto created if null)")]
+    [SerializeField] private Transform followRig;
+    [SerializeField] private Transform lookAtRig;
 
+    // ---- runtime mode ----
+    private enum ActionMode
+    {
+        None,
+        FollowAngles_OneTarget,     // 1体を角度＋距離で追尾（位置も追尾）
+        FollowAngles_TwoTargets,    // 2体の中点を基準に角度＋距離で追尾（位置も追尾）
+        FixedWorld_LookOnly_One,    // 定点（ワールド固定位置）で1体を見る（向きだけ）
+        FixedWorld_LookOnly_Two     // 定点（ワールド固定位置）で中点を見る（向きだけ）
+    }
 
-    [Tooltip("リザルト画面を映すカメラ")]
-    public CinemachineCamera resultCamera;
+    private ActionMode actionMode = ActionMode.None;
+
+    // follow
+    private Transform followTarget1; // attacker or single target
+    private Transform followTarget2; // victim (optional)
+    private FollowShot currentShot;
+
+    // fixed
+    private Vector3 fixedWorldPos;
 
     private CinemachineBrain brain;
 
-    // ==============================
-    // ? 俯瞰カメラ設定
-    // ==============================
-    [Header("Overview Rotation Settings")]
-    [Tooltip("戦闘の中心点")]
-    public Vector3 battleCenter = Vector3.zero;
-
-    [Tooltip("回転速度（度/秒）")]
-    public float rotationSpeed = 10f;
-
-    [Tooltip("回転間隔（周/秒）")]
-    public float rotationInterval = 10f;
-
-    [Tooltip("回転半径（戦場中心からの距離）")]
-    public float rotationRadius = 10f;
-
-    [Tooltip("カメラの高さ")]
-    public float baseHeight = 5f;
-
-    [Tooltip("上下の揺れ幅")]
-    public float heightAmplitude = 0.5f;
-
-    [Tooltip("ズームの振れ幅")]
-    public float zoomAmplitude = 1.0f;
-
-    [Tooltip("ズーム変化速度")]
-    public float zoomSpeed = 0.5f;
-
-    [Tooltip("初期角度（度）")]
-    public float initialAngle = 45f;
-
-    private bool rotateOverview = false;
-    private float angle;
-
-    // ==============================
-    // 初期化
-    // ==============================
     private void Awake()
     {
-        if (Instance != null && Instance != this)
-        {
-            Destroy(gameObject);
-            return;
-
-
-        }
+        if (Instance != null && Instance != this) { Destroy(gameObject); return; }
         Instance = this;
-        DontDestroyOnLoad(gameObject); // シーンをまたいでも保持
+        DontDestroyOnLoad(gameObject);
 
-        brain = Camera.main.GetComponent<CinemachineBrain>();
-        if (brain == null)
+        brain = Camera.main != null ? Camera.main.GetComponent<CinemachineBrain>() : null;
+
+        if (followRig == null)
         {
-            Debug.LogWarning("CinemachineBrainがMainCameraに見つかりません。");
+            followRig = new GameObject("ActionFollowRig").transform;
+            DontDestroyOnLoad(followRig.gameObject);
+        }
+        if (lookAtRig == null)
+        {
+            lookAtRig = new GameObject("ActionLookAtRig").transform;
+            DontDestroyOnLoad(lookAtRig.gameObject);
+        }
+
+        if (overviewCamera != null) CutToOverview(0f);
+        else if (orbitCamera != null) StartOrbit(0f);
+    }
+
+    private void LateUpdate()
+    {
+        switch (actionMode)
+        {
+            case ActionMode.FollowAngles_OneTarget:
+                // UpdateFollowAnglesOne();
+                break;
+
+            case ActionMode.FollowAngles_TwoTargets:
+                UpdateFollowAnglesTwo();
+                break;
+
+            case ActionMode.FixedWorld_LookOnly_One:
+                UpdateFixedLookOnlyOne();
+                break;
+
+            case ActionMode.FixedWorld_LookOnly_Two:
+                UpdateFixedLookOnlyTwo();
+                break;
+        }
+    }
+
+    // ==============================
+    // Public: Basic
+    // ==============================
+    public void CutToOverview(float duration = 0f)
+    {
+        StopAction();
+        KillOrbitTween();
+        SetActiveCam(overviewCamera, duration);
+    }
+
+    public void CutToResult(float duration = 0f)
+    {
+        StopAction();
+        KillOrbitTween();
+        SetActiveCam(resultCamera, duration);
+    }
+
+    // ==============================
+    // Public: Orbit
+    // ==============================
+    public void StartOrbit(float duration = 0f)
+    {
+        StopAction();
+
+        if (orbitCamera == null || centerPos == null) return;
+
+        orbitOrbitalFollow = orbitCamera.GetComponent<CinemachineOrbitalFollow>();
+        if (orbitOrbitalFollow == null)
+        {
+            Debug.LogWarning("[CameraManager] CinemachineOrbitalFollow not found on orbitCamera.");
             return;
         }
 
-        angle = initialAngle;
-        // SetCameraInstant(overviewCamera);
-        SetCameraInstant(orbitCamera);
-        Debug.Log("[CameraManager] カメラ初期化完了");
+        orbitCamera.Follow = centerPos;
+        orbitCamera.LookAt = centerPos;
+
+        KillOrbitTween();
+        orbitOrbitalFollow.HorizontalAxis.Value = 0f;
+
+        SetActiveCam(orbitCamera, duration);
+
+        float sec = Mathf.Max(0.1f, orbitSecondsPerRound);
+        orbitTween = DOTween.To(
+                () => orbitOrbitalFollow.HorizontalAxis.Value,
+                x => orbitOrbitalFollow.HorizontalAxis.Value = x,
+                360f,
+                sec
+            )
+            .SetEase(Ease.Linear)
+            .SetRelative(true)
+            .SetLoops(-1, LoopType.Restart);
+    }
+
+    public void StopOrbit() => KillOrbitTween();
+
+    // ==============================
+    // Public: Action 1体（角度＋距離で追尾）
+    // ==============================
+    public void CutAction_Follow(Transform target, Vector3 offset, float duration = 0f, float fov = 45f )
+    {
+        if (actionCamera == null || target == null) return;
+        KillOrbitTween();
+
+        var followOffset = actionCamera.GetComponent<CinemachineFollow>();
+        if (followOffset == null) return;
+        followOffset.FollowOffset = offset;
+        actionMode = ActionMode.FollowAngles_OneTarget;
+
+        actionCamera.Follow = target;
+        actionCamera.LookAt = target;
+        actionCamera.Lens.FieldOfView = fov;
+
+        SetActiveCam(actionCamera, duration);
+    }
+
+    // ==============================
+    // Public: Action 2体（中点を見る／中点基準で追尾）
+    // ==============================
+    public void CutAction_FollowByAnglesMidpoint(Transform attacker, Transform victim, FollowShot shot, float duration = 0f)
+    {
+        if (actionCamera == null || attacker == null || victim == null) return;
+
+        KillOrbitTween();
+
+        followTarget1 = attacker;
+        followTarget2 = victim;
+        currentShot = shot;
+
+        actionMode = ActionMode.FollowAngles_TwoTargets;
+
+        actionCamera.Follow = followRig;
+        actionCamera.LookAt = lookAtRig;
+        actionCamera.Lens.FieldOfView = shot.fov > 0 ? shot.fov : 45f;
+
+        SetActiveCam(actionCamera, duration);
+    }
+
+    // ==============================
+    // Public: 定点（向きだけ変える）1体
+    // ==============================
+    public void CutAction_FixedWorldLookOnly(Vector3 worldPos, Transform lookAtTarget, float lookAtHeight = 1.2f, float fov = 45f, float duration = 0f)
+    {
+        if (actionCamera == null || lookAtTarget == null) return;
+
+        KillOrbitTween();
+
+        fixedWorldPos = worldPos;
+        followTarget1 = lookAtTarget;
+        followTarget2 = null;
+
+        currentShot = new FollowShot
+        {
+            lookAtHeight = lookAtHeight,
+            fov = fov
+        };
+
+        actionMode = ActionMode.FixedWorld_LookOnly_One;
+
+        // 位置固定：Followを切る
+        actionCamera.Follow = null;
+        actionCamera.LookAt = lookAtRig;
+        actionCamera.transform.position = worldPos;
+        actionCamera.Lens.FieldOfView = fov;
+
+        SetActiveCam(actionCamera, duration);
+    }
+
+    // ==============================
+    // Public: 定点（向きだけ変える）2体中点
+    // ==============================
+    public void CutAction_FixedWorldLookOnlyMidpoint(Vector3 worldPos, Transform attacker, Transform victim, float lookAtHeight = 1.2f, float fov = 45f, float duration = 0f)
+    {
+        if (actionCamera == null || attacker == null || victim == null) return;
+
+        KillOrbitTween();
+
+        fixedWorldPos = worldPos;
+        followTarget1 = attacker;
+        followTarget2 = victim;
+
+        currentShot = new FollowShot
+        {
+            lookAtHeight = lookAtHeight,
+            fov = fov
+        };
+
+        actionMode = ActionMode.FixedWorld_LookOnly_Two;
+
+        actionCamera.Follow = null;
+        actionCamera.LookAt = lookAtRig;
+        actionCamera.transform.position = worldPos;
+        actionCamera.Lens.FieldOfView = fov;
+
+        SetActiveCam(actionCamera, duration);
+    }
+
+    public void EnableFirstPerson(Transform fpvAnchor, Vector3 offset, float duration = 0f)
+    {
+        if (actionCamera == null || fpvAnchor == null) return;
+
+        // ★ 1人称は「位置も回転もアンカーに一致」が基本
+        actionCamera.Follow = fpvAnchor;
+        actionCamera.LookAt = null; // LookAtは不要（自分の向きで見る）
+
+        // Bodyが邪魔しないように：CinemachineFollowのOffsetは0推奨
+        var follow = actionCamera.GetComponent<CinemachineFollow>();
+        if (follow != null)
+        {
+            follow.FollowOffset = offset;
+            // follow.PositionDamping = Vector3.zero;
+            // follow.RotationDamping = 0f;
+        }
+
+        actionCamera.Lens.FieldOfView = 45f;
+        // 初回配置（ブレンドでズレるの防止）
+        actionCamera.transform.SetPositionAndRotation(fpvAnchor.position, fpvAnchor.rotation);
+
+        // カメラ切り替え（あなたのCameraManagerの関数）
+        CameraManager.Instance.SetActiveCam(actionCamera, duration);
+    }
+
+    public void StopAction()
+    {
+        actionMode = ActionMode.None;
+        followTarget1 = null;
+        followTarget2 = null;
     }
 
 
-    // ==============================
-    // リザルトカメラ演出
-    // ==============================
-    public void SwitchToResultCamera()
+    public void ShakeCritical()
     {
-        // カメラを即時切り替え
-        SetCameraInstant(resultCamera);
+        if (criticalImpulse == null) return;
+        criticalImpulse.GenerateImpulse();
+        Debug.Log("ShakeCritical");
     }
 
     // ==============================
-    // 天体カメラ演出
+    // Update: Follow 1体
     // ==============================
-    public void SwitchToOrbitCamera()
+    private void UpdateFollowAnglesOne()
     {
-        Debug.Log("SwitchToOrbitCamera");
+        if (followTarget1 == null) return;
 
-        if (orbitCamera == null)
+        // LookAt（顔あたり）
+        lookAtRig.position = followTarget1.position + Vector3.up * currentShot.lookAtHeight;
+
+        // カメラ位置：targetのYaw基準で yaw/pitch/distance
+        followRig.position = CalcFollowPosByAngles(followTarget1.position, followTarget1.forward, currentShot);
+    }
+
+    // ==============================
+    // Update: Follow 2体（中点）
+    // ==============================
+    private void UpdateFollowAnglesTwo()
+    {
+        if (followTarget1 == null || followTarget2 == null) return;
+
+        Vector3 a = followTarget1.position;
+        Vector3 b = followTarget2.position;
+        Vector3 mid = (a + b) * 0.5f;
+
+        // LookAt：中点＋高さ
+        lookAtRig.position = mid + Vector3.up * currentShot.lookAtHeight;
+
+        // 向き基準： attacker→victim の方向（これが一番破綻しない）
+        Vector3 dir = (b - a);
+        dir.y = 0f;
+        if (dir.sqrMagnitude < 0.0001f) dir = followTarget1.forward;
+        dir.Normalize();
+
+        // カメラ位置：中点を中心に yaw/pitch/distance で置く
+        followRig.position = CalcFollowPosByAngles(mid, dir, currentShot);
+    }
+
+    // ==============================
+    // Update: Fixed LookOnly 1体
+    // ==============================
+    private void UpdateFixedLookOnlyOne()
+    {
+        if (followTarget1 == null) return;
+
+        // 位置固定（念のため毎フレ固定してもOK）
+        actionCamera.transform.position = fixedWorldPos;
+
+        // 注視点だけ更新
+        lookAtRig.position = followTarget1.position + Vector3.up * currentShot.lookAtHeight;
+    }
+
+    // ==============================
+    // Update: Fixed LookOnly 2体中点
+    // ==============================
+    private void UpdateFixedLookOnlyTwo()
+    {
+        if (followTarget1 == null || followTarget2 == null) return;
+
+        actionCamera.transform.position = fixedWorldPos;
+
+        Vector3 mid = (followTarget1.position + followTarget2.position) * 0.5f;
+        lookAtRig.position = mid + Vector3.up * currentShot.lookAtHeight;
+    }
+
+    // ==============================
+    // Math: 角度＋距離→ワールド座標
+    // baseForwardはYaw基準（y=0のforward推奨）
+    // ==============================
+    private Vector3 CalcFollowPosByAngles(Vector3 basePos, Vector3 baseForward, FollowShot shot)
+    {
+        Debug.Log($"basePos: {basePos}, baseForward: {baseForward}");
+        Vector3 forward = baseForward;
+        forward.y = 0f;
+        if (forward.sqrMagnitude < 0.0001f) forward = Vector3.forward;
+        forward.Normalize();
+
+        Vector3 right = Vector3.Cross(Vector3.up, forward).normalized;
+
+        // yaw
+        float yawRad = shot.yawDeg * Mathf.Deg2Rad;
+        Vector3 dirYaw = Mathf.Cos(yawRad) * forward + Mathf.Sin(yawRad) * right;
+
+        // pitch（right軸回転）
+        Quaternion pitchRot = Quaternion.AngleAxis(shot.pitchDeg, right);
+        Vector3 dir = pitchRot * dirYaw;
+
+        float dist = Mathf.Max(0.01f, shot.distance);
+        Debug.Log($"dir: {dir.normalized}, dist: {dist}, basePos + dir.normalized * dist: {basePos + dir.normalized * dist}");
+        return basePos + dir.normalized * dist;
+    }
+
+    // ==============================
+    // Internal
+    // ==============================
+    private void SetActiveCam(CinemachineCamera cam, float duration = 0f)
+    {
+        if (cam == null) return;
+
+        if (brain == null && Camera.main != null)
+            brain = Camera.main.GetComponent<CinemachineBrain>();
+
+        if (brain != null)
         {
-            Debug.LogWarning("orbitCamera が設定されていません");
-            return;
+            brain.DefaultBlend = (duration == 0f)
+                ? new CinemachineBlendDefinition(CinemachineBlendDefinition.Styles.Cut, 0f)
+                : new CinemachineBlendDefinition(CinemachineBlendDefinition.Styles.EaseInOut, duration);
         }
 
-        orbitalFollow = orbitCamera.GetComponent<CinemachineOrbitalFollow>();
-        if (orbitalFollow == null)
-        {
-            Debug.LogWarning("CinemachineOrbitalFollow が orbitCamera に見つかりません");
-            return;
-        }
+        if (overviewCamera != null) overviewCamera.Priority = 0;
+        if (orbitCamera != null) orbitCamera.Priority = 0;
+        if (actionCamera != null) actionCamera.Priority = 0;
+        if (resultCamera != null) resultCamera.Priority = 0;
 
-        orbitCamera.Target.TrackingTarget = centerPos;
+        cam.Priority = 20;
+    }
 
-        // ① 既存のTweenを殺す（多重生成防止）
+    private void KillOrbitTween()
+    {
         if (orbitTween != null && orbitTween.IsActive())
         {
             orbitTween.Kill();
             orbitTween = null;
         }
-
-        // ② 角度をリセット
-        orbitalFollow.HorizontalAxis.Value = 0f;
-        SetCameraInstant(orbitCamera);
-
-        // 0→360度を5秒でループ再生
-        DOTween.To(() => orbitalFollow.HorizontalAxis.Value, x =>
-        {
-            orbitalFollow.HorizontalAxis.Value = x;
-        }, 360f, rotationInterval)
-        .SetEase(Ease.Linear)
-        .SetRelative(true)          // ← ここがポイント。「+360度」を毎回足すイメージ
-        .SetLoops(-1, LoopType.Restart); // 無限ループ
-    }
-
-
-    public void SwitchToActionCameraFront(Transform newTarget, bool isPlayer)
-    {
-        CinemachineCamera actionCamera = isPlayer ? playerActionCameraFront : enemyActionCameraFront;
-        actionCamera.Target.TrackingTarget = newTarget;
-        actionCamera.Target.LookAtTarget = newTarget;
-        SetCameraInstant(actionCamera);
-    }
-
-
-    public void SwitchToActionCameraBack(Transform newTarget, bool isPlayer)
-    {
-        CinemachineCamera actionCamera = isPlayer ? playerActionCameraBack : enemyActionCameraBack;
-        actionCamera.Target.TrackingTarget = newTarget;
-        actionCamera.Target.LookAtTarget = newTarget;
-        SetCameraInstant(actionCamera);
-    }
-
-
-
-    public void SwitchToFixedBackCamera(Transform newTarget, bool isPlayer)
-    {
-        CinemachineCamera actionCamera = isPlayer ? FixCamera_m2_13 : FixCamera_m2_m13;
-        actionCamera.Target.TrackingTarget = newTarget;
-        actionCamera.Target.LookAtTarget = newTarget;
-        SetCameraInstant(actionCamera);
-    }
-
-    public void SwitchToFixed8_13Camera(Transform newTarget, bool isPlayer)
-    {
-        CinemachineCamera actionCamera = isPlayer ? FixCamera_m8_13 : FixCamera_m8_m13;
-        actionCamera.Target.TrackingTarget = newTarget;
-        actionCamera.Target.LookAtTarget = newTarget;
-        SetCameraInstant(actionCamera);
-    }
-
-    // ==============================
-    // 内部Cinemachine設定
-    // ==============================
-    private void SetupCameraFollow(CinemachineCamera cam, Transform target, bool isPlayer, Vector3 offset, float distance)
-    {
-        cam.Follow = target;
-        cam.LookAt = target;
-
-        if (cam.TryGetComponent(out CinemachinePositionComposer composer))
-        {
-            composer.TargetOffset = offset;
-            composer.CameraDistance = distance;
-        }
-        else if (cam.TryGetComponent(out CinemachineThirdPersonFollow thirdPersonFollow))
-        {
-            thirdPersonFollow.CameraDistance = distance;
-        }
-    }
-
-    /// <summary>
-    /// カメラの位置はそのまま、向きだけターゲットを追う設定
-    /// </summary>
-    private void SetupCameraLookOnly(CinemachineCamera cam, Transform target)
-    {
-        if (cam == null || target == null) return;
-
-        // Followは固定。LookAtのみターゲットへ
-        cam.Follow = null;
-        cam.LookAt = target;
-
-        // 現在位置を維持したまま向きだけ更新
-        if (cam.TryGetComponent(out CinemachinePositionComposer composer))
-        {
-            // 位置制御を無効化（距離などを動かさないようにする）
-            composer.CameraDistance = Vector3.Distance(cam.transform.position, target.position);
-            composer.TargetOffset = Vector3.zero;
-        }
-
-        // 即座にターゲット方向を向く（Transformで強制更新）
-        Vector3 dir = (target.position - cam.transform.position).normalized;
-        if (dir.sqrMagnitude > 0.001f)
-        {
-            cam.transform.rotation = Quaternion.LookRotation(dir, Vector3.up);
-        }
-    }
-
-    // ==============================
-    // カメラ優先度切り替え
-    // ==============================
-    private void SetCameraInstant(CinemachineCamera cam)
-    {
-        if (brain != null)
-        {
-            var blend = new CinemachineBlendDefinition(CinemachineBlendDefinition.Styles.Cut, 0f);
-            brain.DefaultBlend = blend;
-        }
-        overviewCamera.Priority = 0;
-        orbitCamera.Priority = 0;
-        playerActionCameraFront.Priority = 0;
-        playerActionCameraBack.Priority = 0;
-        FixCamera_m2_13.Priority = 0;
-        FixCamera_m8_13.Priority = 0;
-        enemyActionCameraFront.Priority = 0;
-        enemyActionCameraBack.Priority = 0;
-        FixCamera_m2_m13.Priority = 0;
-        FixCamera_m8_m13.Priority = 0;
-        resultCamera.Priority = 0;
-        cam.Priority = 20;
-
     }
 }

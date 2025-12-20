@@ -24,6 +24,7 @@ public class BattleUIManager : MonoBehaviour
     public BattleTextManager textManager;
 
     [Header("Skill Buttons")]
+    [SerializeField] private GameObject skillPanelPrefab;
     [SerializeField] private Transform selectPanelParent;
     [SerializeField] private GameObject selectPanelPrefab;
 
@@ -60,15 +61,17 @@ public class BattleUIManager : MonoBehaviour
     private int m_OldEnemyHP;
 
 
+    private readonly List<BattleUISkillPanel> panels = new();
+
     // ================================
     // 初期化
     // ================================
-    public void Init(List<MonsterController> playerControllers, int playerHP, int enemyHP, int courageMax = 100)
+    public void Init(MonsterBattleData[] monsters, int playerHP, int enemyHP, int courageMax = 100)
     {
         // HPバー初期化
         m_OldPlayerHP = 0;
         m_OldEnemyHP = 0;
-        UpdateHP(playerHP, enemyHP, 1.0f);
+        UpdateHP(playerHP, enemyHP, 2.0f);
 
         playerActionBackParent.gameObject.SetActive(false);
         enemyActionBackParent.gameObject.SetActive(false);
@@ -81,7 +84,7 @@ public class BattleUIManager : MonoBehaviour
         }
 
         selectPanelParent.gameObject.SetActive(false);
-        GenerateSkillButtons(playerControllers);
+        GenerateSkillButtons(monsters);
     }
 
     // ================================
@@ -157,8 +160,10 @@ public class BattleUIManager : MonoBehaviour
             int segDelta = Mathf.Abs(segFrom - segTo);
             float segDuration = totalDuration * (segDelta / (float)totalDelta);
 
+            int segColor = Mathf.Max(segFrom, segTo);
+
             // 区間開始時点の色を適用
-            UpdateHPBarColor(bar, background, segFrom);
+            UpdateHPBarColor(bar, background, segColor);
 
             // 現段階内でのバー値を計算
             float startVal = HPInStageValue(segFrom, false, segTo < segFrom);
@@ -324,60 +329,64 @@ public class BattleUIManager : MonoBehaviour
         textManager.ShowMainText(message);
     }
 
-    // ================================
-    // スキルボタン生成
-    // ================================
-    private void GenerateSkillButtons(List<MonsterController> playerControllers)
+    private void GenerateSkillButtons(MonsterBattleData[] monsters)
     {
         foreach (Transform child in selectPanelParent) Destroy(child.gameObject);
-        buttonsByUser.Clear();
+        panels.Clear();
 
-        for (int i = 0; i < playerControllers.Count; i++)
+        for (int i = 0; i < monsters.Length; i++)
         {
-            Debug.Log($"playerCount: {playerControllers.Count}");
-            var monster = playerControllers[i];
-            GameObject unit = Instantiate(selectPanelPrefab, selectPanelParent);
+            var unit = Instantiate(skillPanelPrefab, selectPanelParent);
+            var panel = unit.GetComponent<BattleUISkillPanel>();
 
-            // モンスター画像設定
-            var image = unit.transform.Find("MonsterImageObj/MonsterImage").GetComponent<Image>();
-            image.sprite = monster.sprite;
+            int userIndex = i;
 
-            // ボタン取得
-            Button btn1 = unit.transform.Find("SkillPanel/SkillButtonRedObj/SkillButtonRed").GetComponent<Button>();
-            Button btn2 = unit.transform.Find("SkillPanel/SkillButtonBlueObj/SkillButtonBlue").GetComponent<Button>();
-            var txt1 = btn1.GetComponentInChildren<TextMeshProUGUI>();
-            var txt2 = btn2.GetComponentInChildren<TextMeshProUGUI>();
+            // 念のため多重登録防止：新規生成なので基本いらないが安全
+            panel.OnSkillSelected -= HandleSkillSelected;
+            panel.OnSkillSelected += HandleSkillSelected;
 
-            txt1.text = SkillDatabase.Get(monster.skills[0]).skillName;
-            txt2.text = SkillDatabase.Get(monster.skills[1]).skillName;
-
-            // 登録
-            buttonsByUser[i] = new List<Button> { btn1, btn2 };
-
-            // クリックイベント
-            int u = i;
-            btn1.onClick.AddListener(() => SelectSkillButton(u, 0, btn1));
-            btn2.onClick.AddListener(() => SelectSkillButton(u, 1, btn2));
+            panel.Setup(userIndex, monsters[i]);
+            panels.Add(panel);
         }
     }
 
-
-    private void SelectSkillButton(int userIndex, int skillIndex, Button pressed)
+    private void HandleSkillSelected(int userIndex, int skillIndex)
     {
+
+        Debug.Log($"[UIManager Selected] user={userIndex} skill={skillIndex}");
         AudioManager.Instance.PlayButtonSE();
-        SetSkillButtonFrameActive(pressed, true);
-        // SetButtonImmediateColor(pressed, selectedBtnColor);
-        pressed.interactable = false;
-
-        foreach (var b in buttonsByUser[userIndex])
-        {
-            if (b == pressed) continue;
-            b.interactable = false;
-            b.gameObject.SetActive(false);
-        }
-
         OnSkillSelected?.Invoke(userIndex, skillIndex);
     }
+
+    // ================================
+    // ボタンの有効化・無効化（panels版）
+    // ================================
+    public void ResetButtons()
+    {
+        foreach (var p in panels)
+        {
+            if (p == null) continue;
+            p.ResetButtons();
+        }
+    }
+
+    public void DisableButtons()
+    {
+        foreach (var p in panels)
+        {
+            if (p == null) continue;
+            p.DisableButtons();
+        }
+    }
+
+    public void SetSkillButtonFrameActive(int userIndex, int skillIndex, bool active)
+    {
+        if (userIndex < 0 || userIndex >= panels.Count) return;
+        var p = panels[userIndex];
+        if (p == null) return;
+        p.SetSkillButtonFrameActive(skillIndex, active);
+    }
+
 
     public void OnBattleEndButton()
     {
@@ -387,73 +396,52 @@ public class BattleUIManager : MonoBehaviour
     /// <summary>
     /// 特定のスキルボタンのフレーム表示を切り替える
     /// </summary>
-    public void SetSkillButtonFrameActive(Button button, bool active)
-    {
-        if (button == null) return;
+    // public void SetSkillButtonFrameActive(Button button, bool active)
+    // {
+    //     if (button == null) return;
 
-        // Frame オブジェクトを探す（階層内）
-        Transform frame = button.transform.parent.Find("Frame");
-        if (frame != null)
-        {
-            frame.gameObject.SetActive(active);
-        }
-        else
-        {
-            Debug.LogWarning($"Frame オブジェクトが {button.name} 内に見つかりませんでした。");
-        }
-    }
-
-    /// <summary>
-    /// 外部から特定のスキルボタンのフレーム表示を切り替える
-    /// </summary>
-    public void SetSkillButtonFrameActive(int userIndex, int skillIndex, bool active)
-    {
-        Button button = buttonsByUser[userIndex][skillIndex];
-        if (button == null) return;
-
-        // Frame オブジェクトを探す（階層内）
-        Transform frame = button.transform.parent.Find("Frame");
-        if (frame != null)
-        {
-            frame.gameObject.SetActive(active);
-        }
-        else
-        {
-            Debug.LogWarning($"Frame オブジェクトが {button.name} 内に見つかりませんでした。");
-        }
-    }
-
+    //     // Frame オブジェクトを探す（階層内）
+    //     Transform frame = button.transform.parent.Find("Frame");
+    //     if (frame != null)
+    //     {
+    //         frame.gameObject.SetActive(active);
+    //     }
+    //     else
+    //     {
+    //         Debug.LogWarning($"Frame オブジェクトが {button.name} 内に見つかりませんでした。");
+    //     }
+    // }
 
     // ================================
     // ボタンの有効化・無効化
     // ================================
-    public void ResetButtons()
-    {
-        foreach (var kv in buttonsByUser)
-        {
-            foreach (var btn in kv.Value)
-            {
-                if (!btn) continue;
-                var graphic = btn.targetGraphic as Graphic;
-                if (graphic) graphic.color = Color.white;
-                btn.interactable = true;
-                SetSkillButtonFrameActive(btn, false);
-                btn.gameObject.SetActive(true); // 再表示
-            }
-        }
-    }
+    // public void ResetButtons()
+    // {
+    //     foreach (var kv in buttonsByUser)
+    //     {
+    //         foreach (var btn in kv.Value)
+    //         {
+    //             if (!btn) continue;
+    //             var graphic = btn.targetGraphic as Graphic;
+    //             if (graphic) graphic.color = Color.white;
+    //             btn.interactable = true;
+    //             SetSkillButtonFrameActive(btn, false);
+    //             btn.gameObject.SetActive(true); // 再表示
+    //         }
+    //     }
+    // }
 
-    public void DisableButtons()
-    {
-        foreach (var kv in buttonsByUser)
-        {
-            foreach (var btn in kv.Value)
-            {
-                if (!btn) continue;
-                btn.interactable = false;
-            }
-        }
-    }
+    // public void DisableButtons()
+    // {
+    //     foreach (var kv in buttonsByUser)
+    //     {
+    //         foreach (var btn in kv.Value)
+    //         {
+    //             if (!btn) continue;
+    //             btn.interactable = false;
+    //         }
+    //     }
+    // }
 
     public void SetButtonsActive(bool active)
     {
@@ -483,14 +471,14 @@ public class BattleUIManager : MonoBehaviour
             }
             else if (result.IsCritical) {
                 dmgText.color = popupTextCriticalColor;
-                popup.transform.localScale = Vector3.one * 1.4f;
+                popup.transform.localScale = Vector3.one * 1.8f;
                 popup.transform
                     .DOPunchScale(Vector3.one * 0.5f, 0.25f, 1, 0.5f);
 
                 // クリティカルテキストの表示
                 GameObject popupCritical = Instantiate(damageTextPrefab, canvasTransform);
                 popupCritical.transform.position    = screenPos + new Vector3(0f, 100f, -10f);
-                popupCritical.transform.localScale  = Vector3.one * 1.8f;
+                popupCritical.transform.localScale  = Vector3.one * 1.4f;
                 popupCritical.transform.rotation  = Quaternion.Euler(0f, UnityEngine.Random.Range(-30f, 30f), UnityEngine.Random.Range(-30f, 30f));
                 var criticalText = popupCritical.GetComponent<DamageText>().textMesh;
                 criticalText.text = "CRITICAL!";
