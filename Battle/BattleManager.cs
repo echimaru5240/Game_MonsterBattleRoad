@@ -123,7 +123,7 @@ public class BattleManager : MonoBehaviour
         EnemyCurrentHP = SumHP(enemyControllers);
 
         // UI初期化
-        battleUIManager.Init(playerControllers, PlayerCurrentHP, EnemyCurrentHP, MaxCourage);
+        battleUIManager.Init(playerMonsters, PlayerCurrentHP, EnemyCurrentHP, MaxCourage);
         battleUIManager.OnSkillSelected = OnSkillSelected;
         battleUIManager.OnBattleEnd = OnBattleEnd;
 
@@ -141,9 +141,9 @@ public class BattleManager : MonoBehaviour
         finisherReady = (courageGauge >= MaxCourage);
 
         // ? ステージ情報からカメラ設定
-        CameraManager.Instance.SwitchToOrbitCamera();
+        CameraManager.Instance.StartOrbit();
         battleUIManager.ShowMainText("バトル開始！");
-        yield return new WaitForSeconds(2.0f);
+        yield return new WaitForSeconds(2.5f);
 
         ChangeState(BattleState.TURN_START);
     }
@@ -194,7 +194,8 @@ public class BattleManager : MonoBehaviour
                 break;
 
             case BattleState.RESULT:
-                StartCoroutine(EndBattle(PlayerCurrentHP > 0));
+                EndBattle(PlayerCurrentHP > 0);
+                // StartCoroutine(EndBattle(PlayerCurrentHP > 0));
                 break;
         }
     }
@@ -239,7 +240,9 @@ public class BattleManager : MonoBehaviour
     private IEnumerator ExecuteFinisher()
     {
         battleUIManager.ShowMainText("とどめの一撃発動！！");
-        CameraManager.Instance.SwitchToFixedBackCamera(enemyControllers[0].transform, false);
+        Vector3 fixedPos = new Vector3(-2f, 1f, 13f);
+        CameraManager.Instance.CutAction_FixedWorldLookOnly(fixedPos, enemyControllers[0].transform, fov: 45f);
+
         yield return new WaitForSeconds(2f);
 
         // 攻撃エフェクトを呼び出す
@@ -314,7 +317,7 @@ public class BattleManager : MonoBehaviour
             if (CheckBattleEnd()) yield break;
         }
         // 戻ったら全体カメラへ
-        CameraManager.Instance.SwitchToOrbitCamera();
+        CameraManager.Instance.StartOrbit();
 
         playerActions.Clear();
         currentTurn++;
@@ -330,7 +333,10 @@ public class BattleManager : MonoBehaviour
         AudioManager.Instance.PlayExecuteSkillSE();
         battleUIManager.ShowActionBack(isPlayer);
         battleUIManager.ShowAttackText(isPlayer, attacker.name, skill.skillName);
-        CameraManager.Instance.SwitchToActionCameraFront(attacker.transform, isPlayer);
+        // CameraManager.Instance.SwitchToActionCameraFront(attacker.transform, isPlayer);
+
+        CameraManager.Instance.CutAction_Follow(attacker.transform, new Vector3(3f, 2f, isPlayer ? 10f : -10f), 0f, 30f);
+
         yield return new WaitForSeconds(1.5f);
 
         List<MonsterController> targets = new();
@@ -456,27 +462,29 @@ public class BattleManager : MonoBehaviour
         return false;
     }
 
-    private IEnumerator EndBattle(bool playerWon)
+    private void EndBattle(bool playerWon)
     {
-        CameraManager.Instance.SwitchToOrbitCamera();
-        yield return new WaitForSeconds(1.5f); // 行動間の間を少し取る
+        CameraManager.Instance.StartOrbit();
+        // yield return new WaitForSeconds(1.5f); // 行動間の間を少し取る
         battleUIPanel.SetActive(false);
         resultUIPanel.SetActive(true);
+        Time.timeScale = 1f;
+        DOTween.PlayAll();
 
         // リザルトBGM再生
         AudioManager.Instance.PlayBGM(playerWon ? AudioManager.Instance.victoryBGM : AudioManager.Instance.defeatBGM);
 
         spawner.SetResultObject();
-        CameraManager.Instance.SwitchToResultCamera();
+        CameraManager.Instance.CutToResult();
         List<MonsterController> playerControllers = new();
         playerControllers.AddRange(spawner.PlayerControllers);
         foreach (var playerController in playerControllers )
-            playerController.PlayResultWin(true);
+            playerController.PlayResult(playerWon ? 1 : 2); // 1 = win, 2 = lose
 
         resultUIManager.ShowResult(playerWon, () =>
         {
             foreach (var playerController in playerControllers )
-                playerController.PlayResultWin(false);
+                playerController.PlayResult(0); // 1 = win, 2 = lose
             onBattleEnd?.Invoke(playerWon, courageGauge);
         });
     }

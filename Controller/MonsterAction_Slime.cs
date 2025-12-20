@@ -60,7 +60,17 @@ public class MonsterAction_Slime : MonsterActionBase
         // =============================
         // ? 3回ジグザグ
         // =============================
-        CameraManager.Instance.SwitchToActionCameraBack(selfController.transform, selfController.isPlayer);
+        // 例：Back（あなたのスクショ相当）
+        // PlayerBack: (0,2,-10) / EnemyBack: (0,2,10)
+        Vector3 backOffset = selfController.isPlayer
+            ? new Vector3(0f, 2f, -10f)
+            : new Vector3(0f, 2f,  10f);
+
+        // CameraManager.Instance.CutAction_FollowOffsetWorld(selfController.transform, backOffset, fov: 45f);
+
+        Vector3 offset = new Vector3(0f, 2f, selfController.isPlayer ? -10f : 10f); // ここは好きな位置
+        CameraManager.Instance.CutAction_Follow(selfController.transform, offset);
+        // CameraManager.Instance.SwitchToActionCameraBack(selfController.transform, selfController.isPlayer);
         for (int i = 0; i < 3; i++)
         {
             Vector3 dir = new Vector3((i % 2 == 0 ? 1 : -1) * zigzagAmplitude, 0, 0);
@@ -75,7 +85,14 @@ public class MonsterAction_Slime : MonsterActionBase
         }
 
         seq.AppendCallback(() => {
-            CameraManager.Instance.SwitchToFixedBackCamera(selfController.transform, selfController.isPlayer);
+            Vector3 fixedPos = new Vector3(-3f, 0.5f, selfController.isPlayer ? 18f : -18f); // ここは好きな位置
+            CameraManager.Instance.CutAction_FixedWorldLookOnly(
+                fixedPos,
+                selfController.transform,
+                lookAtHeight: 1.2f,
+                fov: 45f
+            );
+            // CameraManager.Instance.SwitchToFixedBackCamera(selfController.transform, selfController.isPlayer);
         });
 
         // =============================
@@ -136,7 +153,7 @@ public class MonsterAction_Slime : MonsterActionBase
     public void OnMove_Skill1()
     {
         if (moveSE != null) AudioManager.Instance.PlaySE(moveSE);
-        Debug.Log("OnMove");
+        // Debug.Log("OnMove");
     }
 
     /// <summary>
@@ -145,7 +162,7 @@ public class MonsterAction_Slime : MonsterActionBase
     public void OnAttack_Skill1()
     {
         if (attackSE != null) AudioManager.Instance.PlaySE(attackSE);
-        Debug.Log("OnAttack");
+        // Debug.Log("OnAttack");
     }
 
     /// <summary>
@@ -154,7 +171,7 @@ public class MonsterAction_Slime : MonsterActionBase
     public void OnJump_Skill1()
     {
         if (jumpSE != null) AudioManager.Instance.PlaySE(jumpSE);
-        Debug.Log("OnJump");
+        // Debug.Log("OnJump");
     }
 
 
@@ -166,7 +183,7 @@ public class MonsterAction_Slime : MonsterActionBase
         // 攻撃エフェクトを呼び出す
         Vector3 effectPos = currentActionResults[0].Target.transform.position + Vector3.up * 1f;
         EffectManager.Instance.PlayEffectByID(skill1Effect, effectPos, Quaternion.Euler(-90f, 0, 0));
-        Debug.Log("OnAttackHit");
+        // Debug.Log("OnAttackHit");
     }
 
 

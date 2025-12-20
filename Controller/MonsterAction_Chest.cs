@@ -7,7 +7,7 @@ public class MonsterAction_Chest : MonsterActionBase
 {
     [Header("演出設定")]
     public float moveSpeed = 0.5f;    // 移動速度
-    public float stopOffset = 1.2f;
+    public float stopOffset = 2f;
 
     [Header("モーションSE")]
     public AudioClip moveSE;
@@ -29,7 +29,7 @@ public class MonsterAction_Chest : MonsterActionBase
         {
             /* トラップバイト */
             case SkillID.SKILL_ID_TRAP_BITE:
-                yield return StartCoroutine(Execute_Skill1());
+                yield return StartCoroutine(Execute_TrapBite());
                 break;
             /* フロストバイト */
             case SkillID.SKILL_ID_FROST_BITE:
@@ -43,34 +43,46 @@ public class MonsterAction_Chest : MonsterActionBase
         }
     }
 
-    private IEnumerator Execute_Skill1()
+    private IEnumerator Execute_TrapBite()
     {
         var anim = selfController.GetComponent<Animator>();
-        Vector3 start = selfController.transform.position;
-        Vector3 end = currentActionResults[0].Target.transform.position + (selfController.isPlayer ? Vector3.back : Vector3.forward) * stopOffset;
+        Vector3 start = currentActionResults[0].Target.transform.position;
+        Vector3 end = selfController.transform.position + (currentActionResults[0].Target.isPlayer ? Vector3.back : Vector3.forward) * stopOffset;
         Quaternion startRot = selfController.transform.rotation;
         Debug.Log($"プレイヤー？：{selfController.isPlayer}, スタート：{start}, エンド：{end}");
 
         // ? ターゲット方向を向く
-        Vector3 dir = (end - start).normalized;
+        Vector3 dir = (start - end).normalized;
         dir.y = 0;
         Quaternion lookRot = Quaternion.LookRotation(dir);
         selfController.transform.rotation = lookRot;
 
+
         // 前進
-        anim.SetBool("IsMove", true);
+        anim.SetBool("IsChest", true);
+
+        Vector3 offset = new Vector3(0f, 1f, currentActionResults[0].Target.isPlayer ? 1f : -1f); // ここは好きな位置
+        CameraManager.Instance.EnableFirstPerson(currentActionResults[0].Target.transform, offset);
         float t = 0f;
         while (t < 1f)
         {
             t += Time.deltaTime * moveSpeed;
-            selfController.transform.position = Vector3.Lerp(start, end, t);
+            currentActionResults[0].Target.transform.position = Vector3.Lerp(start, end, t);
             yield return null;
         }
         selfController.transform.rotation = startRot;
-        anim.SetBool("IsMove", false);
 
         // 攻撃
+        Vector3 effectPos = selfController.transform.position
+                        + (Vector3.forward * ((selfController.isPlayer) ? 0.3f : -0.3f)) +  Vector3.up * 0.87f;
+        EffectManager.Instance.PlayEffectByID(skill1Effect, effectPos, null, 0.3f);
+        yield return new WaitForSeconds(0.5f);
         anim.SetTrigger("DoAttack");
+        anim.SetBool("IsChest", false);
+        yield return new WaitForSeconds(0.5f);
+        Vector3 worldPos = new Vector3(1f, 1.5f, selfController.isPlayer ? -10f : 10f); // ここは好きな位置
+        CameraManager.Instance.CutAction_FixedWorldLookOnly(worldPos, selfController.transform);
+
     }
 
     /// <summary>
@@ -97,8 +109,8 @@ public class MonsterAction_Chest : MonsterActionBase
     public void OnAttackHit_Skill1()
     {
         // 攻撃エフェクトを呼び出す
-        Vector3 effectPos = currentActionResults[0].Target.transform.position + Vector3.up * 1f;
-        EffectManager.Instance.PlayEffectByID(skill1Effect, effectPos);
+        // Vector3 effectPos = currentActionResults[0].Target.transform.position + Vector3.up * 1f;
+        // EffectManager.Instance.PlayEffectByID(skill1Effect, effectPos);
         Debug.Log("OnAttackHit");
     }
 

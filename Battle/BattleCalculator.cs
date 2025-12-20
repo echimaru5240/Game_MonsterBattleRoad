@@ -54,9 +54,11 @@ public static class BattleCalculator
     /// （新）事前計算済みの結果を反映
     /// 当たりフレーム（アニメーションイベント）で呼び出す
     /// </summary>
-    public static void ApplyActionResults( List<ActionResult> results )
+    public static bool ApplyActionResults( List<ActionResult> results )
     {
-        if (results == null || results.Count == 0) return;
+        bool battleEnd = false;
+
+        if (results == null || results.Count == 0) return false;
 
         var mgr = BattleManager.Instance;
         bool isPlayerSide = false;
@@ -82,11 +84,23 @@ public static class BattleCalculator
 
         // サイドHPへ一括反映（今の設計に合わせる）
         if (isPlayerSide)
+        {
             mgr.PlayerCurrentHP = Mathf.Max(0, mgr.PlayerCurrentHP - totalDamage);
+            if (mgr.PlayerCurrentHP <= 0)
+            {
+                battleEnd = true;
+            }
+        }
         else
+        {
             mgr.EnemyCurrentHP = Mathf.Max(0, mgr.EnemyCurrentHP - totalDamage);
-
+            if (mgr.EnemyCurrentHP <= 0)
+            {
+                battleEnd = true;
+            }
+        }
         mgr.UpdateHPBars();
+        return battleEnd;
     }
 
     /// <summary>

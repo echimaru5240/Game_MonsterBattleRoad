@@ -63,6 +63,8 @@ public class MonsterAction_Cactus : MonsterActionBase
         Quaternion startRot = selfController.transform.rotation;
         spinCount = 0;
 
+        Vector3 offset = new Vector3(0f, 2f, selfController.isPlayer ? 13f : -13f); // ここは好きな位置
+        CameraManager.Instance.CutAction_FixedWorldLookOnly(offset, selfController.transform);
         // ? ターゲット方向を向く
         Vector3 dir = (end - start).normalized;
         dir.y = 0;
@@ -109,7 +111,10 @@ public class MonsterAction_Cactus : MonsterActionBase
         // カメラ切り替え
         needleDanceSeq.AppendCallback(() =>
         {
-            CameraManager.Instance.SwitchToFixed8_13Camera(currentActionResults[0].Target.transform, !selfController.isPlayer);
+            // CameraManager.Instance.SwitchToFixed8_13Camera(currentActionResults[0].Target.transform, !selfController.isPlayer);
+
+            Vector3 worldPos = new Vector3(1f, jumpHeight, selfController.isPlayer ? -10f : 10f); // ここは好きな位置
+            CameraManager.Instance.CutAction_FixedWorldLookOnly(worldPos, currentActionResults[1].Target.transform);
             anim.SetTrigger("DoJump");
         });
 
@@ -156,8 +161,8 @@ public class MonsterAction_Cactus : MonsterActionBase
     /// </summary>
     public void OnMove_Skill1()
     {
-        if (attackSE != null) AudioManager.Instance.PlaySE(moveSE);
-        Debug.Log("OnMove");
+        AudioManager.Instance.PlaySE(moveSE);
+        // Debug.Log("OnMove");
     }
 
     /// <summary>
@@ -165,8 +170,8 @@ public class MonsterAction_Cactus : MonsterActionBase
     /// </summary>
     public void OnJump()
     {
-        if (jumpSE != null) AudioManager.Instance.PlaySE(jumpSE);
-        Debug.Log("OnJump");
+        AudioManager.Instance.PlaySE(jumpSE);
+        // Debug.Log("OnJump");
     }
 
     /// <summary>
@@ -174,8 +179,8 @@ public class MonsterAction_Cactus : MonsterActionBase
     /// </summary>
     public void OnAttack_Skill1()
     {
-        if (attackSE != null) AudioManager.Instance.PlaySE(attackSE);
-        Debug.Log("OnAttack");
+        AudioManager.Instance.PlaySE(attackSE);
+        // Debug.Log("OnAttack");
     }
 
     /// <summary>
@@ -211,7 +216,7 @@ public class MonsterAction_Cactus : MonsterActionBase
         // 攻撃エフェクトを呼び出す
         Vector3 effectPos = selfController.transform.position;
         EffectManager.Instance.PlayEffectByID(healEffect, effectPos, Quaternion.Euler(0f, 0f, 0f), 1.0f);
-        Debug.Log("OnAction_Heal");
+        // Debug.Log("OnAction_Heal");
     }
 
 }
