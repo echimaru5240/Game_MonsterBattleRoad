@@ -6,12 +6,21 @@ using System;
 using CandyCoded.HapticFeedback;
 using DG.Tweening;
 
+public enum MonsterCardEventType
+{
+    Click,
+    LongPress,
+    CardButton,
+    LevelUpButton,
+}
+
 public class MonsterCardView : MonoBehaviour,
     IPointerDownHandler, IPointerUpHandler, IPointerExitHandler
 {
     [Header("UI")]
     [SerializeField] private Image iconImage;
     [SerializeField] private TextMeshProUGUI nameText;
+    [SerializeField] private TextMeshProUGUI levelText;
     [SerializeField] private TextMeshProUGUI hpText;
     [SerializeField] private TextMeshProUGUI atkText;
     [SerializeField] private TextMeshProUGUI mgcText;
@@ -19,31 +28,32 @@ public class MonsterCardView : MonoBehaviour,
     [SerializeField] private TextMeshProUGUI agiText;
     [SerializeField] private Image isPartyCover;
     [SerializeField] private TextMeshProUGUI coverText;
+    [SerializeField] private GameObject levelUpButton;
     [SerializeField] private GameObject cardButton;
     [SerializeField] private TextMeshProUGUI cardButtonText;
     [SerializeField] private Color isPartyColor;
     [SerializeField] private Color isSelectedColor;
 
     [Header("Long Press")]
-    [SerializeField] private float longPressThreshold = 0.6f; // 0.6秒長押しで発火
+    [SerializeField] private float longPressThreshold = 0.6f;
 
     [Header("Click判定")]
-    [SerializeField] private float clickMoveThreshold = 20f; // 何pxまでならタップ扱いか
-    [SerializeField] private float clickTimeThreshold = 0.1f; // 何秒までならタップ扱いか
+    [SerializeField] private float clickMoveThreshold = 20f;
+    [SerializeField] private float clickTimeThreshold = 0.1f;
 
     [Header("Press Animation")]
-    [SerializeField] private float pressedScale = 0.95f;         // 押してる間の縮小倍率
-    [SerializeField] private float pressScaleDuration = 0.08f;   // 縮小にかける時間
-    [SerializeField] private float releasePopScale = 1.05f;      // 離したときに一瞬膨らむ倍率
-    [SerializeField] private float releasePopDuration = 0.12f;   // 膨らみ→戻りにかける合計時間
+    [SerializeField] private float pressedScale = 0.95f;
+    [SerializeField] private float pressScaleDuration = 0.08f;
+    [SerializeField] private float releasePopScale = 1.05f;
+    [SerializeField] private float releasePopDuration = 0.12f;
 
     public int Index { get; private set; }
     public int PartyIndex { get; private set; }
 
     private OwnedMonster ownedData;
-    private Action<MonsterCardView> onClicked;
-    private Action<MonsterCardView> onLongPress;
-    private Action<MonsterCardView> onCardButtonClick;
+
+    // ★ Actionを1本に統合
+    private Action<MonsterCardView, MonsterCardEventType> onEvent;
 
     private bool isPressing;
     private float pressTime;
@@ -61,38 +71,44 @@ public class MonsterCardView : MonoBehaviour,
     public void Setup(
         OwnedMonster data,
         int partyIndex,
-        Action<MonsterCardView> onClicked,
-        Action<MonsterCardView> onLongPress,
-        Action<MonsterCardView> onPartyRemoveOrButton = null)
+        Action<MonsterCardView, MonsterCardEventType> onEvent)
     {
         ownedData = data;
         PartyIndex = partyIndex;
-        this.onClicked = onClicked;
-        this.onLongPress = onLongPress;
-        this.onCardButtonClick = onPartyRemoveOrButton;
+        this.onEvent = onEvent;
 
         isPartyCover.gameObject.SetActive(false);
         coverText.gameObject.SetActive(false);
         cardButton.SetActive(false);
+        levelUpButton.SetActive(false);
 
         if (ownedData != null && ownedData.master != null)
         {
             iconImage.gameObject.SetActive(true);
             iconImage.sprite = ownedData.monsterFarSprite;
             nameText.text    = ownedData.Name;
+            levelText.text   = ownedData.level.ToString();
             hpText.text      = ownedData.hp.ToString();
             atkText.text     = ownedData.atk.ToString();
             mgcText.text     = ownedData.mgc.ToString();
             defText.text     = ownedData.def.ToString();
             agiText.text     = ownedData.agi.ToString();
+
+            // 所持リスト（partyIndex==-1）でパーティ所属なら「はずす」表示
             if (ownedData.isParty && partyIndex == -1)
             {
                 isPartyCover.color = isPartyColor;
                 isPartyCover.gameObject.SetActive(true);
                 coverText.text = "パーティーメンバー";
                 coverText.gameObject.SetActive(true);
+
                 cardButtonText.text = "はずす";
                 cardButton.SetActive(true);
+            }
+            else
+            {
+                // ★ 未振りポイントがあるときだけレベルアップボタン
+                levelUpButton.SetActive(ownedData.unspentStatPoints > 0);
             }
         }
         else
@@ -102,19 +118,13 @@ public class MonsterCardView : MonoBehaviour,
             hpText.text = atkText.text = mgcText.text = defText.text = agiText.text = "-";
         }
 
-        // 念のため毎回リセット
         scaleTween?.Kill();
         transform.localScale = defaultScale;
     }
 
     public void SetCardIndex(int index) => Index = index;
-
     public OwnedMonster GetOwnedMonsterData() => ownedData;
-
-    public void SetIsParty(bool isParty)
-    {
-        if (ownedData != null) ownedData.isParty = isParty;
-    }
+    public void SetIsParty(bool isParty) { if (ownedData != null) ownedData.isParty = isParty; }
 
     private void Update()
     {
@@ -129,21 +139,18 @@ public class MonsterCardView : MonoBehaviour,
             {
                 longPressTriggered = true;
                 HapticFeedback.LightFeedback();
-                onLongPress?.Invoke(this);
+                onEvent?.Invoke(this, MonsterCardEventType.LongPress);
             }
         }
     }
 
     public void OnPointerDown(PointerEventData eventData)
     {
-        Debug.Log("OnPointerDown Card");
         isPressing = true;
         pressTime = 0f;
         longPressTriggered = false;
-        // ★ 押したときの位置を記録
         pointerDownPos = eventData.position;
 
-        // ★ 押したときに少し縮小
         scaleTween?.Kill();
         transform.localScale = defaultScale;
         scaleTween = transform
@@ -153,13 +160,11 @@ public class MonsterCardView : MonoBehaviour,
 
     public void OnPointerUp(PointerEventData eventData)
     {
-        Debug.Log("OnPointerUp Card");
         isPressing = false;
 
         Vector2 pointerUpPos = eventData.position;
         float moveDist = Vector2.Distance(pointerUpPos, pointerDownPos);
 
-        // スクロール判定
         if (moveDist > clickMoveThreshold)
         {
             scaleTween?.Kill();
@@ -181,12 +186,12 @@ public class MonsterCardView : MonoBehaviour,
         {
             if (pressTime < clickTimeThreshold)
             {
-                onClicked?.Invoke(this);
+                onEvent?.Invoke(this, MonsterCardEventType.Click);
             }
-            else if (pressTime >= clickTimeThreshold) {
-                Debug.Log("onLongPress Card");
+            else
+            {
                 longPressTriggered = true;
-                onLongPress?.Invoke(this);
+                onEvent?.Invoke(this, MonsterCardEventType.LongPress);
             }
         }
     }
@@ -201,9 +206,14 @@ public class MonsterCardView : MonoBehaviour,
         transform.localScale = defaultScale;
     }
 
+    public void OnLevelUpButtonClicked()
+    {
+        onEvent?.Invoke(this, MonsterCardEventType.LevelUpButton);
+    }
+
     public void OnCardButtonClicked()
     {
-        onCardButtonClick?.Invoke(this);
+        onEvent?.Invoke(this, MonsterCardEventType.CardButton);
     }
 
     private void OnDisable()
@@ -213,24 +223,13 @@ public class MonsterCardView : MonoBehaviour,
         transform.localScale = defaultScale;
     }
 
-    /// <summary>
-    /// 入れ替え表示（候補/対象）制御
-    /// - showButton=true  : 所持リストで「入れ替え」ボタン表示
-    /// - showButton=false : ハイライトだけ（SelectingTarget中用）
-    /// </summary>
     public void SetReplaceState(
         bool isSelected,
         bool isOwnedList = false,
-        Action<MonsterCardView> onReplace = null,
         bool showButton = true)
     {
         if (ownedData == null) return;
-
-        // パーティ所属で、所持リスト側で「はずす」以外を出したくないなら弾く（元仕様踏襲）
         if (ownedData.isParty && PartyIndex == -1) return;
-
-        // onReplace が渡されたときだけ更新（nullで既存を消さない）
-        if (onReplace != null) onCardButtonClick = onReplace;
 
         isPartyCover.color = isSelectedColor;
         isPartyCover.gameObject.SetActive(isSelected);
@@ -238,6 +237,15 @@ public class MonsterCardView : MonoBehaviour,
         coverText.gameObject.SetActive(isSelected);
 
         cardButtonText.text = "入れ替え";
-        cardButton.SetActive(isSelected && isOwnedList && showButton);
+
+        if (isSelected && isOwnedList && showButton)
+        {
+            cardButton.SetActive(true);
+            levelUpButton.SetActive(false);
+        }
+        else
+        {
+            cardButton.SetActive(false);
+        }
     }
 }

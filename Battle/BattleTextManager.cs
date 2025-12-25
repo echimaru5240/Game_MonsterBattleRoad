@@ -56,17 +56,7 @@ public class BattleTextManager : MonoBehaviour
     // ================================
     public void ShowMainText(string message, float duration = 2f)
     {
-        // mainTextObj.SetActive(true);
-        // StartCoroutine(ShowMainTextRoutine(message, duration));
         Play(message);
-    }
-
-    private IEnumerator ShowMainTextRoutine(string msg, float duration)
-    {
-        battleMainText.text = msg;
-        yield return new WaitForSeconds(duration);
-        mainTextObj.gameObject.SetActive(false);
-        battleMainText.text = "";
     }
 
     public void Play(string message)

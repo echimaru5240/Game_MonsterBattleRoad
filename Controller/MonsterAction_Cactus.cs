@@ -114,7 +114,8 @@ public class MonsterAction_Cactus : MonsterActionBase
             // CameraManager.Instance.SwitchToFixed8_13Camera(currentActionResults[0].Target.transform, !selfController.isPlayer);
 
             Vector3 worldPos = new Vector3(1f, jumpHeight, selfController.isPlayer ? -10f : 10f); // ‚±‚±‚ÍD‚«‚ÈˆÊ’u
-            CameraManager.Instance.CutAction_FixedWorldLookOnly(worldPos, currentActionResults[1].Target.transform);
+            var target = (currentActionResults.Count > 1) ? currentActionResults[1].Target.transform : currentActionResults[0].Target.transform;
+            CameraManager.Instance.CutAction_FixedWorldLookOnly(worldPos, target);
             anim.SetTrigger("DoJump");
         });
 
@@ -144,7 +145,7 @@ public class MonsterAction_Cactus : MonsterActionBase
             anim.SetBool("IsNeedleSpin", false);
             spinCount = 0;
         }
-        Debug.Log("OnNeedleDanceSpin");
+        // Debug.Log("OnNeedleDanceSpin");
     }
 
     /// <summary>
@@ -153,7 +154,7 @@ public class MonsterAction_Cactus : MonsterActionBase
     public void OnNeedleDanceFall()
     {
         selfController.transform.DOMove(needleEnd, diveDuration);
-        Debug.Log("OnNeedleDanceFall");
+        // Debug.Log("OnNeedleDanceFall");
     }
 
     /// <summary>

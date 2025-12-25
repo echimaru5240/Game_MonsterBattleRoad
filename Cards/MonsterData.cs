@@ -24,3 +24,11 @@ public class MonsterData : ScriptableObject
     public Sprite monsterNearSprite;
 }
 
+public enum StatType
+{
+    HP,
+    ATK,
+    MGC,
+    DEF,
+    AGI
+}
