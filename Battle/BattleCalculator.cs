@@ -151,7 +151,7 @@ public static class BattleCalculator
     // ================================
     public static int CalculateDamage(MonsterController attacker, MonsterController defender, SkillData skill)
     {
-        int atk = 0;
+        float atk = 0f;
         switch (skill.category) {
             case  SkillCategory.PHYSICAL:
                 atk = attacker.atk;
@@ -166,7 +166,7 @@ public static class BattleCalculator
                 atk = attacker.atk;
                 break;
         }
-        int def = defender != null ? defender.def : 0;
+        float def = defender != null ? defender.def : 0f;
 
         float power = skill.power; // Skill ‘¤‚Å”’li100‚È‚ç“™”{j
 

@@ -80,8 +80,10 @@ public class MonsterAction_Turtle : MonsterActionBase
         CameraManager.Instance.CutAction_Follow(currentActionResults[0].Target.transform, offset);
 
         // 3. 頭上にファイアーボール生成
-        Vector3 spawnPos = selfController.transform.position + Vector3.forward * 6f + Vector3.up * 1f;
-        EffectManager.Instance.PlayEffectByID(beamEffect, spawnPos, Quaternion.Euler(0f, 0f, 0f));
+        Vector3 spawnPos = selfController.transform.position
+                            + (selfController.isPlayer ? Vector3.forward * 6f : Vector3.forward * -6f)
+                            + Vector3.up * 1f;
+        EffectManager.Instance.PlayEffectByID(beamEffect, spawnPos, Quaternion.Euler(selfController.isPlayer ? 0f : 180f, 0f, 0f));
         yield return new WaitForSeconds(2.5f);
         selfController.OnAttackLastHit();
         selfController.OnAttackEnd();

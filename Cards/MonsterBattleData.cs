@@ -7,11 +7,11 @@ public class MonsterBattleData: MonoBehaviour
     public string Name;
 
     [Header("ステータス")]
-    public int hp;
-    public int atk;
-    public int mgc; // 魔法や回復用
-    public int def;
-    public int agi;
+    public float hp;
+    public float atk;
+    public float mgc; // 魔法や回復用
+    public float def;
+    public float agi;
 
     [Header("スキル")]
     public SkillID[] skills;
@@ -35,11 +35,11 @@ public class MonsterBattleData: MonoBehaviour
         battleData.Name = master.Name;
 
         // ステータス
-        battleData.hp  = master.hp ;
-        battleData.atk = master.atk;
-        battleData.mgc = master.mgc;
-        battleData.def = master.def;
-        battleData.agi = master.agi;
+        battleData.hp  = (float)master.hp ;
+        battleData.atk = (float)master.atk;
+        battleData.mgc = (float)master.mgc;
+        battleData.def = (float)master.def;
+        battleData.agi = (float)master.agi;
 
         // 表示用
         battleData.prefab = master.prefab;

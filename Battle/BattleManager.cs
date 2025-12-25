@@ -73,6 +73,8 @@ public class BattleManager : MonoBehaviour
 
     private int currentTurn = 1;
     private System.Action<bool, int> onBattleEnd;
+    private static float battleSpeed = 1.0f;
+    private int exp = 0;
 
     private void Start() => Debug.Log("BattleManager Initialized.");
 
@@ -87,6 +89,9 @@ public class BattleManager : MonoBehaviour
 
         // 戦闘BGM再生
         AudioManager.Instance.PlayBGM(stage.bgm);
+        Time.timeScale = battleSpeed;
+        DOTween.PlayAll();
+        exp = 0;
 
         // モンスター配置設定
         MonsterBattleData[] enemyBattleData = new MonsterBattleData[0];;
@@ -107,6 +112,7 @@ public class BattleManager : MonoBehaviour
                     enemyBattleData[i] = null; // 空スロット
                     continue;
                 }
+                exp += 100;
 
                 enemyBattleData[i] = MonsterBattleData.CreateBattleFromMasterData(enemy);
             }
@@ -150,9 +156,9 @@ public class BattleManager : MonoBehaviour
 
     private int SumHP(List<MonsterController> monsters)
     {
-        int sum = 0;
+        float sum = 0;
         foreach (var monster in monsters) sum += monster.hp;
-        return sum;
+        return Mathf.FloorToInt(sum);
     }
 
     // ================================
@@ -294,7 +300,7 @@ public class BattleManager : MonoBehaviour
         // プレイヤー行動（フィニッシャー後は空）
         foreach (var action in playerActions)
         {
-            int priority = action.user.agi + Random.Range(0, action.user.agi / 2);
+            int priority = Mathf.FloorToInt(action.user.agi + Random.Range(0, action.user.agi / 2));
             turnActions.Add(new ActionData(action.user, action.skill, true, priority));
         }
 
@@ -302,7 +308,7 @@ public class BattleManager : MonoBehaviour
         foreach (var enemy in enemyControllers)
         {
             var skill = SkillDatabase.Get(enemy.skills[Random.Range(0, enemy.skills.Count)]);
-            int priority = enemy.agi + Random.Range(0, enemy.agi / 2);
+            int priority = Mathf.FloorToInt(enemy.agi + Random.Range(0, enemy.agi / 2));
             turnActions.Add(new ActionData(enemy, skill, false, priority));
         }
 
@@ -313,8 +319,10 @@ public class BattleManager : MonoBehaviour
         foreach (var action in turnActions)
         {
             yield return StartCoroutine(ExecuteAction(action.monster, action.skill, action.isPlayer));
-
             if (CheckBattleEnd()) yield break;
+            yield return new WaitForSeconds(1.0f);
+            // モンスターの位置を戻す
+            SetMonsterPositionForWaitinig();
         }
         // 戻ったら全体カメラへ
         CameraManager.Instance.StartOrbit();
@@ -333,9 +341,19 @@ public class BattleManager : MonoBehaviour
         AudioManager.Instance.PlayExecuteSkillSE();
         battleUIManager.ShowActionBack(isPlayer);
         battleUIManager.ShowAttackText(isPlayer, attacker.name, skill.skillName);
-        // CameraManager.Instance.SwitchToActionCameraFront(attacker.transform, isPlayer);
 
-        CameraManager.Instance.CutAction_Follow(attacker.transform, new Vector3(3f, 2f, isPlayer ? 10f : -10f), 0f, 30f);
+        var offset = new Vector3(3f, 2f, isPlayer ? 10f : -10f);
+        if (BoundsUtil.TryGetVisualBounds(attacker.gameObject, out var b))
+        {
+            Vector3 size = b.size;           // 幅/高さ/奥行き（ワールド）
+            float radius = BoundsUtil.GetRadius(b);
+            Debug.Log($"size={size}, radius={radius}");
+            if (radius > 2) {
+                offset *= Mathf.Sqrt(radius * 0.8f);
+            }
+        }
+        CameraManager.Instance.CutAction_Follow(attacker.transform, offset, 0f, 30f);
+
 
         yield return new WaitForSeconds(1.5f);
 
@@ -380,10 +398,9 @@ public class BattleManager : MonoBehaviour
 
         battleUIManager.HideAttackText(isPlayer);
         UpdateHPBars();
+        yield return new WaitForSeconds(0.5f);
         // if (isPlayer) AddCourage(10);
 
-        // モンスターの位置を戻す
-        SetMonsterPositionForWaitinig();
     }
 
     // ================================
@@ -464,8 +481,9 @@ public class BattleManager : MonoBehaviour
 
     private void EndBattle(bool playerWon)
     {
+        // モンスターの位置を戻す
+        SetMonsterPositionForWaitinig();
         CameraManager.Instance.StartOrbit();
-        // yield return new WaitForSeconds(1.5f); // 行動間の間を少し取る
         battleUIPanel.SetActive(false);
         resultUIPanel.SetActive(true);
         Time.timeScale = 1f;
@@ -478,13 +496,9 @@ public class BattleManager : MonoBehaviour
         CameraManager.Instance.CutToResult();
         List<MonsterController> playerControllers = new();
         playerControllers.AddRange(spawner.PlayerControllers);
-        foreach (var playerController in playerControllers )
-            playerController.PlayResult(playerWon ? 1 : 2); // 1 = win, 2 = lose
 
-        resultUIManager.ShowResult(playerWon, () =>
+        resultUIManager.ShowResult(playerWon, playerControllers, currentTurn, exp, () =>
         {
-            foreach (var playerController in playerControllers )
-                playerController.PlayResult(0); // 1 = win, 2 = lose
             onBattleEnd?.Invoke(playerWon, courageGauge);
         });
     }
@@ -505,6 +519,7 @@ public class BattleManager : MonoBehaviour
     public static void Resume()
     {
         IsPaused = false;
+        battleSpeed = 1f;
         Time.timeScale = 1f;
         DOTween.PlayAll();
     }
@@ -512,6 +527,7 @@ public class BattleManager : MonoBehaviour
     public static void Playx2()
     {
         IsPaused = false;
+        battleSpeed = 2f;
         Time.timeScale = 2f;
         DOTween.PlayAll();
     }

@@ -12,11 +12,11 @@ public class MonsterController : MonoBehaviour
     [Header("ステータス")]
     public string name;
     public Sprite sprite;
-    public int hp;
-    public int atk;
-    public int mgc; // 魔法や回復用
-    public int def;
-    public int agi;
+    public float hp;
+    public float atk;
+    public float mgc; // 魔法や回復用
+    public float def;
+    public float agi;
 
     [Header("行動関連")]
     public List<SkillID> skills = new();
@@ -85,7 +85,6 @@ public class MonsterController : MonoBehaviour
         yield return StartCoroutine(actionBehavior.Execute(this, currentActionResults, skill));
 
         while (!fAttackEnd) yield return null;
-        yield return new WaitForSeconds(1.5f);
     }
 
     public void ReturnToInitialPosition()

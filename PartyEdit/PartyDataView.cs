@@ -17,23 +17,17 @@ public class PartyDataView : MonoBehaviour
     private PartyData partyData;
     private bool isCurrentParty;
 
-    // 長押しはPartyEditManagerへ（詳細表示）
-    private Action<MonsterCardView> onMonsterCardViewLongPressed;
+    // ★ これ1本だけ
+    private Action<MonsterCardView, MonsterCardEventType> onCardEvent;
 
-    // ★ slotタップ通知（PartyEditManagerへ）
-    private Action<int> onPartySlotClicked;
-
-    public void Setup(
-        Action<MonsterCardView> onMonsterCardViewLongPressed,
-        Action<int> onPartySlotClicked)
+    public void Setup(Action<MonsterCardView, MonsterCardEventType> onCardEvent)
     {
-        this.onMonsterCardViewLongPressed = onMonsterCardViewLongPressed;
-        this.onPartySlotClicked = onPartySlotClicked;
+        this.onCardEvent = onCardEvent;
     }
 
     public void RefreshPartyData(PartyData partyData, bool isCurrentParty)
     {
-        int totalHp = 0;
+        float totalHp = 0;
 
         this.partyData = partyData;
         this.isCurrentParty = isCurrentParty;
@@ -42,22 +36,21 @@ public class PartyDataView : MonoBehaviour
         {
             var monster = partyData.members[i];
 
-            // ★ onClicked は PartyDataView 内のハンドラにして、slotIndex を上に通知
-            partySlots[i].Setup(monster, i, OnPartyMonsterClicked, onMonsterCardViewLongPressed);
+            // ★ Party slotも同じイベント1本を渡す
+            partySlots[i].Setup(monster, i, OnPartySlotEvent);
             partySlots[i].SetCardIndex(i);
 
             if (monster != null)
             {
                 totalHp += monster.hp;
 
-                // ※本当はManagerだけで管理したいが、現状のUI（所持側の「パーティーメンバー」表示）
-                // を維持するために踏襲。将来的には partyId/slotIndex 化推奨。
+                // 現状踏襲（将来的にpartyId/slotIndex化推奨）
                 monster.isParty = isCurrentParty ? true : monster.isParty;
             }
         }
 
         partyNameText.text = partyData.partyName;
-        teamHpText.text = totalHp.ToString();
+        teamHpText.text = Mathf.FloorToInt(totalHp).ToString();
         viewFrame.gameObject.SetActive(isCurrentParty);
     }
 
@@ -81,11 +74,18 @@ public class PartyDataView : MonoBehaviour
         return true;
     }
 
-    private void OnPartyMonsterClicked(MonsterCardView card)
+    private void OnPartySlotEvent(MonsterCardView card, MonsterCardEventType type)
     {
+        // ★ 現在パーティ以外は無視（これまで通り）
         if (!isCurrentParty) return;
-        onPartySlotClicked?.Invoke(card.PartyIndex);
-        // 必要なら onRefresh?.Invoke();（いまはManager側で RefreshAllView する想定）
+
+        // Party側で許可するイベントはここで制限できる
+        // 例：Party slotにLevelUpButtonがあっても意味ないなら弾く
+        // if (type == MonsterCardEventType.LevelUpButton)
+        //     return;
+
+        // そのまま上へ
+        onCardEvent?.Invoke(card, type);
     }
 
     private void OnClickPartyName()

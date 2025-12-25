@@ -40,6 +40,7 @@ public class PartyEditManager : MonoBehaviour
     [Header("UI - Detail Data")]
     [SerializeField] private DetailSwipePager detailSwipePager;
     [SerializeField] private MonsterDetailDataView monsterDetailDataView;
+    [SerializeField] private StatAllocateView allocateView;
 
     [Header("UI - Popup")]
     [SerializeField] private PartyEditPopup popup;
@@ -71,6 +72,7 @@ public class PartyEditManager : MonoBehaviour
 
         AudioManager.Instance.PlayHomeBGM();
         popup.Setup();
+        allocateView.gameObject.SetActive(false);
 
         // 詳細画面クローズ通知
         monsterDetailDataView.Setup(OnDetailClosed);
@@ -92,10 +94,7 @@ public class PartyEditManager : MonoBehaviour
         for (int i = 0; i < partyDataSize; i++)
         {
             // ★ PartyDataViewは “slotクリック通知” だけを上げる
-            partyDataSlots[i].Setup(
-                OnMonsterCardViewLongPressed,
-                OnPartySlotClicked
-            );
+            partyDataSlots[i].Setup(OnCardEvent);
         }
 
         RefreshAllView();
@@ -172,13 +171,7 @@ public class PartyEditManager : MonoBehaviour
             var item = Instantiate(listItemPrefab, listContentParent);
 
             // 一覧のカード
-            item.Setup(
-                owned,
-                -1,
-                OnOwnedMonsterClicked,          // タップ
-                OnMonsterCardViewLongPressed,   // 長押し
-                OnPartyRemoveButtonClicked      // 「はずす」（isPartyのとき）
-            );
+            item.Setup(owned, -1, OnCardEvent);
             item.SetCardIndex(i);
 
             // ★ 候補のハイライト復元
@@ -192,7 +185,6 @@ public class PartyEditManager : MonoBehaviour
                 item.SetReplaceState(
                     isSelected: true,
                     isOwnedList: true,
-                    onReplace: null,
                     showButton: false
                 );
             }
@@ -200,6 +192,42 @@ public class PartyEditManager : MonoBehaviour
             {
                 item.SetReplaceState(false);
             }
+        }
+    }
+
+    private void OnCardEvent(MonsterCardView card, MonsterCardEventType type)
+    {
+        if (card == null) return;
+
+        bool isOwnedList = (card.PartyIndex == -1); // 所持リストは -1 を入れてる想定
+        var owned = card.GetOwnedMonsterData();
+
+        switch (type)
+        {
+            case MonsterCardEventType.Click:
+                if (isOwnedList) OnOwnedMonsterClicked(card);
+                else OnPartySlotClicked(card.PartyIndex); // 旧Action<int>相当
+                break;
+
+            case MonsterCardEventType.LongPress:
+                OnMonsterCardViewLongPressed(card); // 既存の長押し処理へ
+                break;
+
+            case MonsterCardEventType.CardButton:
+                if (isOwnedList)
+                {
+                    // 所持側のボタンは「はずす」or「入れ替え」
+                    OnPartyRemoveButtonClicked(card);
+                }
+                else
+                {
+                    // Party側でボタン使うならここ（今は不要なら何もしない）
+                }
+                break;
+
+            case MonsterCardEventType.LevelUpButton:
+                OnOwnedLevelUpButtonClicked(card);
+                break;
         }
     }
 
@@ -369,6 +397,20 @@ public class PartyEditManager : MonoBehaviour
         }
 
         RefreshAllView();
+    }
+
+    private void OnOwnedLevelUpButtonClicked(MonsterCardView card)
+    {
+        var owned = card.GetOwnedMonsterData();
+        if (owned == null) return;
+
+        // 未振りが無いなら何もしない（ボタン表示されてない想定だが念のため）
+        if (owned.unspentStatPoints <= 0) return;
+
+        // ここは「DETAILを開く」だけでOK
+        // (detail内で + 押して振る)
+        OpenDetail(card.Index, card.PartyIndex);
+        monsterDetailDataView.OpenAllocateView();
     }
 
     // ================================
