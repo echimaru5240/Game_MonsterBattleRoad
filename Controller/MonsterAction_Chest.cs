@@ -71,6 +71,7 @@ public class MonsterAction_Chest : MonsterActionBase
             yield return null;
         }
         selfController.transform.rotation = startRot;
+        selfController.OnStartTimingTap();
 
         // 攻撃
         Vector3 effectPos = selfController.transform.position
@@ -80,7 +81,7 @@ public class MonsterAction_Chest : MonsterActionBase
         anim.SetTrigger("DoAttack");
         anim.SetBool("IsChest", false);
         yield return new WaitForSeconds(0.5f);
-        Vector3 worldPos = new Vector3(1f, 1.5f, selfController.isPlayer ? -10f : 10f); // ここは好きな位置
+        Vector3 worldPos = new Vector3(1f, 1.5f, selfController.isPlayer ? -13f : 13f); // ここは好きな位置
         CameraManager.Instance.CutAction_FixedWorldLookOnly(worldPos, selfController.transform);
 
     }
@@ -122,6 +123,7 @@ public class MonsterAction_Chest : MonsterActionBase
         // 前進
         anim.SetBool("IsMove", true);
         yield return MoveToTarget(selfController, currentActionResults[0].Target);
+        selfController.OnStartTimingTap();
         anim.SetBool("IsMove", false);
 
         // 攻撃

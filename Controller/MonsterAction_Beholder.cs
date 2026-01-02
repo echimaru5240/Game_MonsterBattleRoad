@@ -85,7 +85,9 @@ public class MonsterAction_Beholder : MonsterActionBase
                             + (selfController.isPlayer ? Vector3.forward * 6f : Vector3.forward * -6f)
                             + Vector3.up * 1f;
         EffectManager.Instance.PlayEffectByID(beamEffect, spawnPos, Quaternion.Euler(selfController.isPlayer ? 0f : 180f, 0f, 0f));
-        yield return new WaitForSeconds(2.5f);
+        yield return new WaitForSeconds(1.0f);
+        selfController.OnStartTimingTap();
+        yield return new WaitForSeconds(1.0f);
         anim.SetBool("IsBeam", false);
         selfController.OnAttackLastHit();
         selfController.OnAttackEnd();
@@ -179,6 +181,7 @@ public class MonsterAction_Beholder : MonsterActionBase
         // ‡B “G‚ÉŒü‚©‚Á‚Ä”ò‚Î‚·
         // =============================
         AudioManager.Instance.PlaySE(shotSE);
+        selfController.OnStartTimingTap();
         Vector3 targetPos = currentActionResults[0].Target.transform.position + Vector3.up * 1.0f;
         Tween moveTween = currentFireball.transform.DOMove(targetPos, fireballTravelTime)
             .SetEase(Ease.Linear)

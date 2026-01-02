@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using System.Collections;
+using System.Collections.Generic;
 using System;
 using UnityEngine.UI;
 
@@ -45,7 +46,11 @@ public class PartyEditManager : MonoBehaviour
     [Header("UI - Popup")]
     [SerializeField] private PartyEditPopup popup;
 
-    private PartyData[] partyDatas;
+    [Header("Sort UI")]
+    [SerializeField] private MonsterSortButtonView sortMenuView;
+
+
+    private PartyData[] partyDatas = new PartyData[3];
     private int currentPartyIndex;
     private PlayerMonsterInventory inventoryMonsters;
 
@@ -66,6 +71,12 @@ public class PartyEditManager : MonoBehaviour
     private int detailIndex;
     private int detailTotal;
 
+    private MonsterSortType currentSort = MonsterSortType.ID;
+    private MonsterFilterType currentFilter = MonsterFilterType.None;
+    private bool sortAscending = true;
+
+    private List<OwnedMonster> displayList = new();
+
     private void Start()
     {
         state = PartyEditState.LIST;
@@ -82,6 +93,13 @@ public class PartyEditManager : MonoBehaviour
         {
             inventoryMonsters = ctx.inventory;
             partyDatas = ctx.partyList;
+            for (int i = 0; i < partyDatas.Length; i++)
+            {
+                for (int j = 0; j < partyDatas[i].members.Length; j++)
+                {
+                    if (partyDatas[i].members[j].monsterId == 0) partyDatas[i].members[j] = null;
+                }
+            }
             currentPartyIndex = ctx.CurrentPartyIndex;
         }
         else
@@ -98,6 +116,19 @@ public class PartyEditManager : MonoBehaviour
         }
 
         RefreshAllView();
+    }
+
+    private void DebugParty(string tag)
+    {
+        Debug.Log($"[{tag}]");
+        for (int p = 0; p < partyDatas.Length; p++)
+        {
+            for (int s = 0; s < partyDatas[p].members.Length; s++)
+            {
+                var m = partyDatas[p].members[s];
+                Debug.Log($"party{p}[{s}] = {(m==null ? "null" : $"id={m.monsterId}, name='{m.Name}'")}");
+            }
+        }
     }
 
     private void ChangeState(PartyEditState newState)
@@ -159,15 +190,11 @@ public class PartyEditManager : MonoBehaviour
             Destroy(child.gameObject);
         }
 
-        if (inventoryMonsters == null || inventoryMonsters.ownedMonsters == null)
-        {
-            Debug.LogWarning("inventoryMonsters が未設定です。");
-            return;
-        }
+        RebuildDisplayList();
 
-        for (int i = 0; i < inventoryMonsters.ownedMonsters.Count; i++)
+        for (int i = 0; i < displayList.Count; i++)
         {
-            var owned = inventoryMonsters.ownedMonsters[i];
+            var owned = displayList[i];
             var item = Instantiate(listItemPrefab, listContentParent);
 
             // 一覧のカード
@@ -201,6 +228,7 @@ public class PartyEditManager : MonoBehaviour
 
         bool isOwnedList = (card.PartyIndex == -1); // 所持リストは -1 を入れてる想定
         var owned = card.GetOwnedMonsterData();
+        sortMenuView.Hide();
 
         switch (type)
         {
@@ -214,15 +242,8 @@ public class PartyEditManager : MonoBehaviour
                 break;
 
             case MonsterCardEventType.CardButton:
-                if (isOwnedList)
-                {
-                    // 所持側のボタンは「はずす」or「入れ替え」
-                    OnPartyRemoveButtonClicked(card);
-                }
-                else
-                {
-                    // Party側でボタン使うならここ（今は不要なら何もしない）
-                }
+                // 所持側のボタンは「はずす」or「入れ替え」
+                OnPartyRemoveButtonClicked(card);
                 break;
 
             case MonsterCardEventType.LevelUpButton:
@@ -486,6 +507,54 @@ public class PartyEditManager : MonoBehaviour
         RefreshOwnedMonsterListView();
     }
 
+    private void RebuildDisplayList()
+    {
+        displayList = MonsterQuery.Execute(
+            inventoryMonsters.ownedMonsters,
+            currentFilter,
+            currentSort,
+            sortAscending
+        );
+    }
+
+    public void OnOpenSortMenu()
+    {
+        if (sortMenuView == null) return;
+
+        // すでに開いてたら閉じる
+        if (sortMenuView.IsVisible)
+        {
+            sortMenuView.Hide();
+            return;
+        }
+        CancelReplace();
+        RefreshAllView();
+
+        sortMenuView.Show(currentSort, sortAscending, type =>
+        {
+            // 同じ項目なら昇降反転、違うなら昇順に
+            if (currentSort == type)
+            {
+                sortAscending = !sortAscending;
+            }
+            else
+            {
+                currentSort = type;
+                switch (currentSort) {
+                    case MonsterSortType.ID:
+                    case MonsterSortType.Name:
+                        sortAscending = true;
+                        break;
+                    default:
+                        sortAscending = false;
+                        break;
+                }
+            }
+
+            RefreshOwnedMonsterListView(); // あなたの表示更新関数
+        });
+    }
+
     private void SetPartyPointer()
     {
         for (int i = 0; i < partyPointerObjs.Length; i++)
@@ -508,7 +577,7 @@ public class PartyEditManager : MonoBehaviour
     private OwnedMonster GetDetailMonster(int i)
     {
         if (detailPartyIndex == -1)
-            return inventoryMonsters.ownedMonsters[i];
+            return displayList[i];
         else
             return partyDatas[currentPartyIndex].members[i];
     }
@@ -563,15 +632,38 @@ public class PartyEditManager : MonoBehaviour
         detailSwipePager.SetPagePosition();
     }
 
+
     private void OnMonsterCardViewLongPressed(MonsterCardView card)
     {
         OpenDetail(card.Index, card.PartyIndex);
     }
 
+    /// モンスター詳細画面を閉じる
     private void OnDetailClosed()
     {
         ChangeState(PartyEditState.LIST);
         RefreshAllView();
+    }
+
+    /// フィルター変更時の処理
+    public void OnFilterChanged(MonsterFilterType filter)
+    {
+        currentFilter = filter;
+        RefreshOwnedMonsterListView();
+    }
+
+    /// 並び順変更時の処理
+    public void OnSortChanged(MonsterSortType type)
+    {
+        if (currentSort == type)
+            sortAscending = !sortAscending;
+        else
+        {
+            currentSort = type;
+            sortAscending = false;
+        }
+
+        RefreshOwnedMonsterListView();
     }
 
     // ================================
@@ -593,6 +685,7 @@ public class PartyEditManager : MonoBehaviour
         }
 
         AudioManager.Instance.PlayButtonSE();
+        GameContext.Instance.SaveGame();
         SceneManager.LoadScene("HomeScene");
     }
 }

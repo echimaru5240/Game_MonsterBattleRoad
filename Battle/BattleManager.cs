@@ -75,6 +75,8 @@ public class BattleManager : MonoBehaviour
     private System.Action<bool, int> onBattleEnd;
     private static float battleSpeed = 1.0f;
     private int exp = 0;
+    // スキップを表す特別値（未選択=-1 と区別）
+    private const int SKILL_SKIP = -2;
 
     private void Start() => Debug.Log("BattleManager Initialized.");
 
@@ -91,7 +93,8 @@ public class BattleManager : MonoBehaviour
         AudioManager.Instance.PlayBGM(stage.bgm);
         Time.timeScale = battleSpeed;
         DOTween.PlayAll();
-        exp = 0;
+        exp = stage.stageLevel * 150;
+        if(stage.isBossStage) exp *= 15;
 
         // モンスター配置設定
         MonsterBattleData[] enemyBattleData = new MonsterBattleData[0];;
@@ -112,9 +115,8 @@ public class BattleManager : MonoBehaviour
                     enemyBattleData[i] = null; // 空スロット
                     continue;
                 }
-                exp += 100;
 
-                enemyBattleData[i] = MonsterBattleData.CreateBattleFromMasterData(enemy);
+                enemyBattleData[i] = MonsterBattleData.CreateBattleFromMasterData(enemy, stage.stageLevel);
             }
         }
         spawner.SetSpawnAreaPositions(stage.isBossStage);
@@ -157,7 +159,7 @@ public class BattleManager : MonoBehaviour
     private int SumHP(List<MonsterController> monsters)
     {
         float sum = 0;
-        foreach (var monster in monsters) sum += monster.hp;
+        foreach (var monster in monsters) sum += monster.battleData.hp;
         return Mathf.FloorToInt(sum);
     }
 
@@ -185,6 +187,22 @@ public class BattleManager : MonoBehaviour
                 battleUIManager.ResetButtons();
                 battleUIManager.ShowTurnText(currentTurn); // ← スキル選択中にターンを表示
                 // ボタン入力を待つ → OnSkillSelected が呼ばれたら EXECUTING へ
+
+                // ★ここで行動不能を自動スキップ確定
+                for (int i = 0; i < playerControllers.Count; i++)
+                {
+                    bool canAct = !IsUnableToAct(playerControllers[i]);
+
+                    // UIに反映（押せない＆暗く）
+                    battleUIManager.SetUserCanAct(i, canAct);
+
+                    // 行動不能なら「選択済み扱い＝スキップ」を確定して進行を止めない
+                    if (!canAct) ForceSelectSkip(i);
+                }
+
+                // ここで全員埋まったなら即実行へ（全員行動不能とか）
+                if (IsAllUsersSelected())
+                    StartCoroutine(AllUsersSelected());
                 break;
 
             case BattleState.EXECUTING:
@@ -212,9 +230,16 @@ public class BattleManager : MonoBehaviour
     private void OnSkillSelected(int monsterIndex, int skillIndex)
     {
         if (selectedByUser[monsterIndex] != -1) return;
+        var monster = playerControllers[monsterIndex];
+
+        // ★保険：行動不能なら選べない（自動スキップで確定）
+        if (IsUnableToAct(monster))
+        {
+            ForceSelectSkip(monsterIndex);
+            return;
+        }
 
         selectedByUser[monsterIndex] = skillIndex;
-        var monster = playerControllers[monsterIndex];
         var skill = SkillDatabase.Get(monster.skills[skillIndex]);
 
         playerActions.Add((monster, skill));
@@ -238,6 +263,34 @@ public class BattleManager : MonoBehaviour
         for (int i = 0; i < selectedByUser.Length; i++)
             if (selectedByUser[i] == -1) return false;
         return true;
+    }
+
+    // 例：MonsterController 側に状態異常がある想定
+    private bool IsUnableToAct(MonsterController m)
+    {
+        switch (m.battleData.statusAilmentType) {
+            case StatusAilmentType.PARALYSIS:
+            case StatusAilmentType.SLEEP:
+            case StatusAilmentType.STUN:
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    private void ForceSelectSkip(int monsterIndex)
+    {
+        if (selectedByUser[monsterIndex] != -1) return;
+
+        selectedByUser[monsterIndex] = SKILL_SKIP;
+
+        var monster = playerControllers[monsterIndex];
+        Debug.Log($"{monster.name} は行動不能のためスキップ");
+
+        if (IsAllUsersSelected())
+        {
+            StartCoroutine(AllUsersSelected());
+        }
     }
 
     // ================================
@@ -300,7 +353,7 @@ public class BattleManager : MonoBehaviour
         // プレイヤー行動（フィニッシャー後は空）
         foreach (var action in playerActions)
         {
-            int priority = Mathf.FloorToInt(action.user.agi + Random.Range(0, action.user.agi / 2));
+            int priority = Mathf.FloorToInt(action.user.battleData.agi + Random.Range(0, action.user.battleData.agi / 2));
             turnActions.Add(new ActionData(action.user, action.skill, true, priority));
         }
 
@@ -308,7 +361,7 @@ public class BattleManager : MonoBehaviour
         foreach (var enemy in enemyControllers)
         {
             var skill = SkillDatabase.Get(enemy.skills[Random.Range(0, enemy.skills.Count)]);
-            int priority = Mathf.FloorToInt(enemy.agi + Random.Range(0, enemy.agi / 2));
+            int priority = Mathf.FloorToInt(enemy.battleData.agi + Random.Range(0, enemy.battleData.agi / 2));
             turnActions.Add(new ActionData(enemy, skill, false, priority));
         }
 
@@ -323,6 +376,11 @@ public class BattleManager : MonoBehaviour
             yield return new WaitForSeconds(1.0f);
             // モンスターの位置を戻す
             SetMonsterPositionForWaitinig();
+            if (action.monster.battleData.statusAilmentType != StatusAilmentType.NONE)
+            {
+                action.monster.battleData.statusAilmentType = StatusAilmentType.NONE;
+                action.monster.RecoveryFromDizzy();
+            }
         }
         // 戻ったら全体カメラへ
         CameraManager.Instance.StartOrbit();
@@ -339,9 +397,6 @@ public class BattleManager : MonoBehaviour
     private IEnumerator ExecuteAction(MonsterController attacker, SkillData skill, bool isPlayer)
     {
         AudioManager.Instance.PlayExecuteSkillSE();
-        battleUIManager.ShowActionBack(isPlayer);
-        battleUIManager.ShowAttackText(isPlayer, attacker.name, skill.skillName);
-
         var offset = new Vector3(3f, 2f, isPlayer ? 10f : -10f);
         if (BoundsUtil.TryGetVisualBounds(attacker.gameObject, out var b))
         {
@@ -353,54 +408,67 @@ public class BattleManager : MonoBehaviour
             }
         }
         CameraManager.Instance.CutAction_Follow(attacker.transform, offset, 0f, 30f);
+        battleUIManager.ShowActionBack(isPlayer);
 
+        switch (attacker.battleData.statusAilmentType) {
+            case StatusAilmentType.PARALYSIS:
+                battleUIManager.ShowAttackText(isPlayer, attacker.name, "マヒして動けない！");
+                yield return new WaitForSeconds(1f);
+                break;
 
-        yield return new WaitForSeconds(1.5f);
+            case StatusAilmentType.SLEEP:
+                battleUIManager.ShowAttackText(isPlayer, attacker.name, "眠っている！");
+                yield return new WaitForSeconds(1f);
+                break;
 
-        List<MonsterController> targets = new();
+            case StatusAilmentType.STUN:
+                battleUIManager.ShowAttackText(isPlayer, attacker.name, "混乱している！");
+                yield return new WaitForSeconds(1f);
+                break;
 
-        switch (skill.action)
-        {
-            case SkillAction.ATTACK:
-                if (skill.targetType == TargetType.ENEMY_ALL)
-                    targets.AddRange(isPlayer ? spawner.EnemyControllers : spawner.PlayerControllers);
-                else
-                {
-                    var target = isPlayer
-                        ? spawner.EnemyControllers[Random.Range(0, spawner.EnemyControllers.Count)]
-                        : spawner.PlayerControllers[Random.Range(0, spawner.PlayerControllers.Count)];
-                    targets.Add(target);
+            case StatusAilmentType.FREEZE:
+                battleUIManager.ShowAttackText(isPlayer, attacker.name, "凍って動けない！");
+                yield return new WaitForSeconds(1f);
+                break;
+
+            default:
+                battleUIManager.ShowActionBack(isPlayer);
+                battleUIManager.ShowAttackText(isPlayer, attacker.name, skill.skillName);
+
+                yield return new WaitForSeconds(1.5f);
+                List<MonsterController> targets = new();
+                MonsterController target = new();
+
+                switch (skill.targetType) {
+                    case TargetType.ENEMY_SINGLE:
+                        target = isPlayer
+                            ? spawner.EnemyControllers[Random.Range(0, spawner.EnemyControllers.Count)]
+                            : spawner.PlayerControllers[Random.Range(0, spawner.PlayerControllers.Count)];
+                        targets.Add(target);
+                        break;
+                    case TargetType.ENEMY_ALL:
+                        targets.AddRange(isPlayer ? spawner.EnemyControllers : spawner.PlayerControllers);
+                        break;
+                    case TargetType.PLAYER_SINGLE:
+                        target = isPlayer
+                            ? spawner.EnemyControllers[Random.Range(0, spawner.PlayerControllers.Count)]
+                            : spawner.PlayerControllers[Random.Range(0, spawner.EnemyControllers.Count)];
+                        targets.Add(target);
+                        break;
+                    case TargetType.PLAYER_ALL:
+                        targets.AddRange(isPlayer ? spawner.PlayerControllers : spawner.EnemyControllers);
+                        break;
+
                 }
                 SetMonsterPositionForAttack(attacker, targets, skill.targetType);
                 // 攻撃コルーチン実行
                 yield return StartCoroutine(attacker.PerformAction(targets, skill));
                 break;
-
-            case SkillAction.HEAL:
-                if (skill.targetType == TargetType.ENEMY_ALL)
-                    targets.AddRange(isPlayer ? spawner.PlayerControllers : spawner.EnemyControllers);
-                else
-                {
-                    var target = isPlayer
-                        ? spawner.PlayerControllers[Random.Range(0, spawner.PlayerControllers.Count)]
-                        : spawner.EnemyControllers[Random.Range(0, spawner.EnemyControllers.Count)];
-                    targets.Add(target);
-                }
-                // 攻撃コルーチン実行
-                yield return StartCoroutine(attacker.PerformAction(targets, skill));
-                break;
-
-            case SkillAction.SPECIAL:
-                float buffValue = BattleCalculator.CalculateBuffValue(skill);
-                Debug.Log($"{attacker.name} がバフ効果 {buffValue} を得た！");
-                break;
         }
-
         battleUIManager.HideAttackText(isPlayer);
         UpdateHPBars();
         yield return new WaitForSeconds(0.5f);
         // if (isPlayer) AddCourage(10);
-
     }
 
     // ================================
@@ -529,6 +597,14 @@ public class BattleManager : MonoBehaviour
         IsPaused = false;
         battleSpeed = 2f;
         Time.timeScale = 2f;
+        DOTween.PlayAll();
+    }
+
+    public static void Playx3()
+    {
+        IsPaused = false;
+        battleSpeed = 3f;
+        Time.timeScale = 3f;
         DOTween.PlayAll();
     }
 

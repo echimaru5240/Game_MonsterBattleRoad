@@ -387,61 +387,19 @@ public class BattleUIManager : MonoBehaviour
         p.SetSkillButtonFrameActive(skillIndex, active);
     }
 
+    public void SetUserCanAct(int userIndex, bool canAct)
+    {
+        if (userIndex < 0 || userIndex >= panels.Count) return;
+        var p = panels[userIndex];
+        if (p == null) return;
+
+        p.SetCanAct(canAct);
+    }
 
     public void OnBattleEndButton()
     {
         OnBattleEnd?.Invoke();
     }
-
-    /// <summary>
-    /// 特定のスキルボタンのフレーム表示を切り替える
-    /// </summary>
-    // public void SetSkillButtonFrameActive(Button button, bool active)
-    // {
-    //     if (button == null) return;
-
-    //     // Frame オブジェクトを探す（階層内）
-    //     Transform frame = button.transform.parent.Find("Frame");
-    //     if (frame != null)
-    //     {
-    //         frame.gameObject.SetActive(active);
-    //     }
-    //     else
-    //     {
-    //         Debug.LogWarning($"Frame オブジェクトが {button.name} 内に見つかりませんでした。");
-    //     }
-    // }
-
-    // ================================
-    // ボタンの有効化・無効化
-    // ================================
-    // public void ResetButtons()
-    // {
-    //     foreach (var kv in buttonsByUser)
-    //     {
-    //         foreach (var btn in kv.Value)
-    //         {
-    //             if (!btn) continue;
-    //             var graphic = btn.targetGraphic as Graphic;
-    //             if (graphic) graphic.color = Color.white;
-    //             btn.interactable = true;
-    //             SetSkillButtonFrameActive(btn, false);
-    //             btn.gameObject.SetActive(true); // 再表示
-    //         }
-    //     }
-    // }
-
-    // public void DisableButtons()
-    // {
-    //     foreach (var kv in buttonsByUser)
-    //     {
-    //         foreach (var btn in kv.Value)
-    //         {
-    //             if (!btn) continue;
-    //             btn.interactable = false;
-    //         }
-    //     }
-    // }
 
     public void SetButtonsActive(bool active)
     {
@@ -455,55 +413,99 @@ public class BattleUIManager : MonoBehaviour
     // ================================
     public void ShowDamagePopup(BattleCalculator.ActionResult result)
     {
-        Vector3 worldPos = result.Target.transform.position + Vector3.up * 2f;
-        Vector3 screenPos = Camera.main.WorldToScreenPoint(worldPos);
-        GameObject popup = Instantiate(damageTextPrefab, canvasTransform);
-        popup.transform.position = screenPos;
+        if (result.Target == null) return;
 
-        var dmgText = popup.GetComponent<DamageText>().textMesh;
-        dmgText.text = result.Value.ToString();
+        var cam = Camera.main;
+        if (cam == null) return;
 
-        if (result.IsDamage) {
-            dmgText.color = popupTextDamageColor;
-            if (result.IsMiss) {
-                dmgText.color = Color.gray;
-                dmgText.text = "Miss";
-            }
-            else if (result.IsCritical) {
-                dmgText.color = popupTextCriticalColor;
-                popup.transform.localScale = Vector3.one * 1.8f;
-                popup.transform
-                    .DOPunchScale(Vector3.one * 0.5f, 0.25f, 1, 0.5f);
+        Vector3 worldPos  = result.Target.transform.position + Vector3.up * 2f;
+        Vector3 screenPos = cam.WorldToScreenPoint(worldPos);
 
-                // クリティカルテキストの表示
-                GameObject popupCritical = Instantiate(damageTextPrefab, canvasTransform);
-                popupCritical.transform.position    = screenPos + new Vector3(0f, 100f, -10f);
-                popupCritical.transform.localScale  = Vector3.one * 1.4f;
-                popupCritical.transform.rotation  = Quaternion.Euler(0f, UnityEngine.Random.Range(-30f, 30f), UnityEngine.Random.Range(-30f, 30f));
-                var criticalText = popupCritical.GetComponent<DamageText>().textMesh;
-                criticalText.text = "CRITICAL!";
-                criticalText.color = popupTextCriticalTextColor;
-                // ふわっと上に浮かんでフェードアウト
-                var cgCrit = popupCritical.AddComponent<CanvasGroup>();
-                cgCrit.alpha = 1f;
-
-                Sequence critSeq = DOTween.Sequence();
-                critSeq.Append(popupCritical.transform.DOMoveY(popupCritical.transform.position.y + 40f, damageTextFadeDuration));
-                critSeq.Join(cgCrit.DOFade(0f, damageTextFadeDuration));
-                critSeq.OnComplete(() => Destroy(popupCritical));
-            }
+        // Miss は数値表示しない
+        if (result.IsMiss)
+        {
+            var missPopup = CreatePopup(screenPos, "Miss", Color.gray);
+            FadeAndDestroy(missPopup, damageTextFadeDuration);
+            return;
         }
-        else {
-            dmgText.color = Color.green;
+
+        // 味方回復などで 0 表示は不要なら終了
+        int value = result.Value;
+        if (value == 0) return;
+
+        // 本体ポップアップ（数値）
+        bool isHeal = !result.IsDamage;
+
+        Color baseColor = isHeal
+            ? Color.green
+            : (result.IsCritical ? popupTextCriticalColor : popupTextDamageColor);
+
+        var popup = CreatePopup(screenPos, value.ToString(), baseColor);
+
+        if (result.IsDamage && result.IsCritical)
+        {
+            PlayCriticalPunch(popup);
+            ShowCriticalText(screenPos);
         }
-        var cg = popup.AddComponent<CanvasGroup>();
+
+        FadeAndDestroy(popup, damageTextFadeDuration);
+    }
+
+    // ----------------------------
+    // Helpers
+    // ----------------------------
+    private GameObject CreatePopup(Vector3 screenPos, string text, Color color)
+    {
+        GameObject go = Instantiate(damageTextPrefab, canvasTransform);
+        go.transform.position = screenPos;
+
+        var dmgText = go.GetComponent<DamageText>().textMesh;
+        dmgText.text  = text;
+        dmgText.color = color;
+
+        return go;
+    }
+
+    private void FadeAndDestroy(GameObject go, float duration)
+    {
+        var cg = go.GetComponent<CanvasGroup>();
+        if (cg == null) cg = go.AddComponent<CanvasGroup>();
         cg.alpha = 1f;
 
-        // 少し残ってからスッと消える
-        Sequence seq = DOTween.Sequence();
-        seq.Append(cg.DOFade(0f, damageTextFadeDuration));
-        seq.OnComplete(() => Destroy(popup));
+        DOTween.Sequence()
+            .Append(cg.DOFade(0f, duration))
+            .OnComplete(() => Destroy(go));
     }
+
+    private void PlayCriticalPunch(GameObject popup)
+    {
+        popup.transform.localScale = Vector3.one * 1.8f;
+        popup.transform.DOPunchScale(Vector3.one * 0.5f, 0.25f, 1, 0.5f);
+    }
+
+    private void ShowCriticalText(Vector3 baseScreenPos)
+    {
+        Vector3 pos = baseScreenPos + new Vector3(0f, 100f, -10f);
+
+        var crit = CreatePopup(pos, "CRITICAL!", popupTextCriticalTextColor);
+        crit.transform.localScale = Vector3.one * 1.4f;
+        crit.transform.rotation   = Quaternion.Euler(
+            0f,
+            UnityEngine.Random.Range(-30f, 30f),
+            UnityEngine.Random.Range(-30f, 30f)
+        );
+
+        // ふわっと上 + フェード
+        var cg = crit.GetComponent<CanvasGroup>();
+        if (cg == null) cg = crit.AddComponent<CanvasGroup>();
+        cg.alpha = 1f;
+
+        DOTween.Sequence()
+            .Append(crit.transform.DOMoveY(crit.transform.position.y + 40f, damageTextFadeDuration))
+            .Join(cg.DOFade(0f, damageTextFadeDuration))
+            .OnComplete(() => Destroy(crit));
+    }
+
 
     // ================================
     // ボタン即時色変更

@@ -94,7 +94,7 @@ public class Skill : ScriptableObject
     [Header("基本情報")]
     public string skillName;            // 技の名前
     [Header("行動の種類")]
-    public SkillAction type;              // 技の種類（攻撃 / 回復 / 補助）
+    public SkillAction action;              // 技の種類（攻撃 / 回復 / 補助）
     public SkillCategory category;      //カテゴリー
     public TargetType targetType;       // 対象範囲（単体 / 全体）
     public ElementType elementType;     // 属性

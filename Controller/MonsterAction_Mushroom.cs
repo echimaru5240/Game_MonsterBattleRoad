@@ -23,6 +23,7 @@ public class MonsterAction_MushRoom : MonsterActionBase
     [Header("エフェクト")]
     public EffectID crashEffect;
     public EffectID healEffect;
+    public EffectID paralysisEffect;
 
     private Animator anim;
     private MonsterController selfController;
@@ -44,12 +45,12 @@ public class MonsterAction_MushRoom : MonsterActionBase
                 yield return StartCoroutine(Execute_MushCrasher());
                 break;
             /* サボテンジュース */
-            // case SkillID.SKILL_ID_MUSH_CRUSHER:
-            //     yield return StartCoroutine(Execute_MushCrasher());
-            //     break;
+            case SkillID.SKILL_ID_MUSH_POWDER:
+                yield return StartCoroutine(Execute_MushPowder());
+                break;
             default:
                 Debug.LogWarning($"{selfController.name} のスキル「{skill.skillName}」は未実装です。");
-                yield return StartCoroutine(Execute_Heal());
+                yield return StartCoroutine(Execute_MushPowder());
                 break;
                 // yield break;
         }
@@ -71,7 +72,7 @@ public class MonsterAction_MushRoom : MonsterActionBase
         seq.AppendCallback(() => {
             // CameraManager.Instance.SwitchToFixedBackCamera(selfController.transform, selfController.isPlayer);
 
-            Vector3 fixedPos = new Vector3(-8f, 2f, selfController.isPlayer ? 13f : -13f); // ここは好きな位置
+            Vector3 fixedPos = new Vector3(-4f, 2f, selfController.isPlayer ? 16f : -16f); // ここは好きな位置
             CameraManager.Instance.CutAction_FixedWorldLookOnly(
                 fixedPos,
                 selfController.transform,
@@ -94,6 +95,10 @@ public class MonsterAction_MushRoom : MonsterActionBase
         seq.Join(selfController.transform.DORotate(new Vector3(180f, 0, 0), jumpDuration, RotateMode.LocalAxisAdd)
             .SetEase(Ease.OutQuad));
 
+        // 落下開始と同時にタイミングタップ開始し、結果が出るまで進行を止める
+        seq.AppendCallback(() => {
+            selfController.OnStartTimingTap();
+            });
         // 落下
         seq.Append(selfController.transform.DOMove(targetPos, jumpDuration*0.8f)
             .SetEase(Ease.InCirc));
@@ -118,16 +123,6 @@ public class MonsterAction_MushRoom : MonsterActionBase
 
         // シーケンス終了を待機
         yield return seq.WaitForCompletion();
-
-        // bool jumpFinished = false;
-        // selfController.transform
-        //     .DOJump(targetPos, jumpHeight, 1, jumpDuration)
-        //     .SetEase(Ease.Linear)    // DOJump 内部で放物線になるので Ease はお好み
-        //     .OnComplete(() => jumpFinished = true);
-
-        // while (!jumpFinished)
-        //     yield return null;
-
     }
 
     /// <summary>
@@ -158,17 +153,19 @@ public class MonsterAction_MushRoom : MonsterActionBase
     }
 
 
-    public IEnumerator Execute_Heal()
+    public IEnumerator Execute_MushPowder()
     {
-        var anim = selfController.GetComponent<Animator>();
+        anim = selfController.GetComponent<Animator>();
 
-        yield return null;
-
+        Vector3 worldPos = new Vector3(-0.2f, 2f, selfController.isPlayer ? -13f : 13f); // ここは好きな位置
+        CameraManager.Instance.CutAction_FixedWorldLookOnly(worldPos, selfController.transform);
         // 攻撃
-        anim.SetTrigger("DoHeal");
+        anim.SetTrigger("DoAttack");
         // 攻撃エフェクトを呼び出す
-        Vector3 effectPos = selfController.transform.position;
-        EffectManager.Instance.PlayEffectByID(healEffect, effectPos, Quaternion.Euler(0f, 0f, 0f), 2.0f);
+        Vector3 effectPos = selfController.transform.position + Vector3.up * 1.0f + Vector3.forward * (selfController.isPlayer ? 0.5f : -0.5f);
+        float rot = selfController.isPlayer ? 0f : 180f;
+        EffectManager.Instance.PlayEffectByID(paralysisEffect, effectPos, Quaternion.Euler(0f, rot, 180f), 3f);
+        yield return new WaitForSeconds(1f);
     }
 
     /// <summary>

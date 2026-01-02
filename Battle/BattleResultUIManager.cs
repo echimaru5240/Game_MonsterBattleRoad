@@ -66,8 +66,8 @@ public class BattleResultUIManager : MonoBehaviour
         }
 
         resultPanel.SetActive(true);
-        textManager.ShowMainText(playerWon);
-        textManager.ShowBattleResult(turn, gainExp);
+        textManager.ShowMainText(playerWon, turn, gainExp);
+        // textManager.ShowBattleResult(turn, gainExp);
         // resultExpAnimator.targets に、表示したい3体を入れておく（monster Transform + owned）
         if (playerWon) expBarAnimator.Play(gainedExp: gainExp);
     }
