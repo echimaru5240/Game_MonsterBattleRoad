@@ -20,6 +20,7 @@ public class CameraManager : MonoBehaviour
     [SerializeField] private CinemachineCamera overviewCamera;
     [SerializeField] private CinemachineCamera orbitCamera;
     [SerializeField] private CinemachineCamera actionCamera;
+    [SerializeField] private CinemachineCamera actionCameraCut;
     [SerializeField] private CinemachineCamera resultCamera;
 
     [Header("Brain Blend")]
@@ -167,19 +168,19 @@ public class CameraManager : MonoBehaviour
     // ==============================
     public void CutAction_Follow(Transform target, Vector3 offset, float duration = 0f, float fov = 45f )
     {
-        if (actionCamera == null || target == null) return;
+        if (actionCameraCut == null || target == null) return;
         KillOrbitTween();
 
-        var followOffset = actionCamera.GetComponent<CinemachineFollow>();
+        var followOffset = actionCameraCut.GetComponent<CinemachineFollow>();
         if (followOffset == null) return;
         followOffset.FollowOffset = offset;
         actionMode = ActionMode.FollowAngles_OneTarget;
 
-        actionCamera.Follow = target;
-        actionCamera.LookAt = target;
-        actionCamera.Lens.FieldOfView = fov;
+        actionCameraCut.Follow = target;
+        actionCameraCut.LookAt = target;
+        actionCameraCut.Lens.FieldOfView = fov;
 
-        SetActiveCam(actionCamera, duration);
+        SetActiveCam(actionCameraCut, duration);
     }
 
     // ==============================
@@ -209,7 +210,9 @@ public class CameraManager : MonoBehaviour
     // ==============================
     public void CutAction_FixedWorldLookOnly(Vector3 worldPos, Transform lookAtTarget, float lookAtHeight = 1.2f, float fov = 45f, float duration = 0f)
     {
-        if (actionCamera == null || lookAtTarget == null) return;
+        var camera = (duration == 0f) ? actionCameraCut : actionCamera;
+
+        if (camera == null || lookAtTarget == null) return;
 
         KillOrbitTween();
 
@@ -226,12 +229,12 @@ public class CameraManager : MonoBehaviour
         actionMode = ActionMode.FixedWorld_LookOnly_One;
 
         // à íuå≈íËÅFFollowÇêÿÇÈ
-        actionCamera.Follow = null;
-        actionCamera.LookAt = lookAtRig;
-        actionCamera.transform.position = worldPos;
-        actionCamera.Lens.FieldOfView = fov;
+        camera.Follow = null;
+        camera.LookAt = lookAtRig;
+        camera.transform.position = worldPos;
+        camera.Lens.FieldOfView = fov;
 
-        SetActiveCam(actionCamera, duration);
+        SetActiveCam(camera, duration);
     }
 
     // ==============================
@@ -415,6 +418,7 @@ public class CameraManager : MonoBehaviour
         if (overviewCamera != null) overviewCamera.Priority = 0;
         if (orbitCamera != null) orbitCamera.Priority = 0;
         if (actionCamera != null) actionCamera.Priority = 0;
+        if (actionCameraCut != null) actionCameraCut.Priority = 0;
         if (resultCamera != null) resultCamera.Priority = 0;
 
         cam.Priority = 20;

@@ -9,8 +9,10 @@ public static class BattleCalculator
         public MonsterController Target;
         public bool IsDamage;
         public int Value;
+        public float Multiplier;
         public bool IsCritical;
         public bool IsMiss;
+        public StatusAilmentType statusAilmentType;
     }
 
     /// <summary>
@@ -33,14 +35,15 @@ public static class BattleCalculator
             if (target == null ) continue;
 
             ActionResult result = new();
-            switch (skill.targetType) {
-                case TargetType.ENEMY_SINGLE:
-                case TargetType.ENEMY_ALL:
+            switch (skill.action) {
+                case SkillAction.ATTACK:
                     result = CalculateAttackResult(attacker, target, skill, disableCritical: isMultiTarget);
                     break;
-                case TargetType.PLAYER_SINGLE:
-                case TargetType.PLAYER_ALL:
+                case SkillAction.HEAL:
                     result = CalculateHealResult(attacker, skill);
+                    break;
+                case SkillAction.SPECIAL:
+                    result = CalculateSpecialResult(attacker, target, skill);
                     break;
             }
             results.Add(result);
@@ -49,6 +52,34 @@ public static class BattleCalculator
         return results;
     }
 
+    public static void ApplyTimingTapResults(List<ActionResult> results, float timingMultiplier)
+    {
+        if (results == null || results.Count == 0) return;
+
+        // 0以下は変な値なのでガード（任意）
+        if (timingMultiplier <= 0f) timingMultiplier = 1f;
+
+        for (int i = 0; i < results.Count; i++)
+        {
+            var r = results[i];
+
+            // Miss の結果はそのまま（倍率かけても 0 のまま）
+            // もし「Missでも少し入る」にしたいなら IsMiss の時に value を作る設計に変える
+            if (r.IsMiss)
+            {
+                r.Multiplier = 0f; // 表示用に 0 としておくなら
+                results[i] = r;
+                continue;
+            }
+
+            r.Multiplier = timingMultiplier;
+
+            // ダメージ/回復どちらでも Value に倍率をかける（好みで分けてもOK）
+            r.Value = Mathf.Max(0, Mathf.RoundToInt(r.Value * timingMultiplier));
+
+            results[i] = r;
+        }
+    }
 
     /// <summary>
     /// （新）事前計算済みの結果を反映
@@ -80,6 +111,8 @@ public static class BattleCalculator
             else {
                 totalDamage -= result.Value;
             }
+
+            if (result.statusAilmentType != StatusAilmentType.NONE) target.battleData.statusAilmentType = result.statusAilmentType;
         }
 
         // サイドHPへ一括反映（今の設計に合わせる）
@@ -146,6 +179,24 @@ public static class BattleCalculator
         };
     }
 
+    /// <summary>
+    /// 攻撃結果をまとめて返す
+    /// </summary>
+    public static ActionResult CalculateSpecialResult(MonsterController attacker, MonsterController target, SkillData skill, bool disableCritical = false)
+    {
+        bool isMiss = Random.value > skill.accuracy; // ミス判定などもここで
+
+        return new ActionResult
+        {
+            Target = target,
+            IsDamage = false,
+            Value = 0,
+            IsCritical = false,
+            IsMiss = isMiss,
+            statusAilmentType = isMiss ? StatusAilmentType.NONE : skill.statusAilmentType,
+        };
+    }
+
     // ================================
     // 通常攻撃ダメージ計算
     // ================================
@@ -154,19 +205,19 @@ public static class BattleCalculator
         float atk = 0f;
         switch (skill.category) {
             case  SkillCategory.PHYSICAL:
-                atk = attacker.atk;
+                atk = attacker.battleData.atk;
                 break;
             case  SkillCategory.MAGICAL:
-                atk = attacker.mgc;
+                atk = attacker.battleData.mgc;
                 break;
             case  SkillCategory.SPECIAL:
-                atk = (attacker.atk + attacker.mgc) / 2;
+                atk = (attacker.battleData.atk + attacker.battleData.mgc) / 2;
                 break;
             default:
-                atk = attacker.atk;
+                atk = attacker.battleData.atk;
                 break;
         }
-        float def = defender != null ? defender.def : 0f;
+        float def = defender != null ? defender.battleData.def : 0f;
 
         float power = skill.power; // Skill 側で数値（100なら等倍）
 
@@ -185,7 +236,7 @@ public static class BattleCalculator
     // ================================
     public static int CalculateHeal(MonsterController user, SkillData skill)
     {
-        int heal = Mathf.RoundToInt(user.mgc * (skill.power / 100f));
+        int heal = Mathf.RoundToInt(user.battleData.mgc + skill.power);
         return Mathf.Max(1, heal);
     }
 

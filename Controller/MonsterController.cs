@@ -9,14 +9,7 @@ public class MonsterController : MonoBehaviour
 
     public bool isPlayer;
 
-    [Header("ステータス")]
-    public string name;
-    public Sprite sprite;
-    public float hp;
-    public float atk;
-    public float mgc; // 魔法や回復用
-    public float def;
-    public float agi;
+    public MonsterBattleData battleData;
 
     [Header("行動関連")]
     public List<SkillID> skills = new();
@@ -44,14 +37,9 @@ public class MonsterController : MonoBehaviour
     public void InitializeFromData(MonsterBattleData monster, bool isPlayer)
     {
         this.isPlayer = isPlayer;
+        battleData = monster;
         name = monster.Name;
-        sprite = monster.monsterNearSprite;
-
-        hp = monster.hp;
-        atk = monster.atk;
-        mgc = monster.mgc;
-        def = monster.def;
-        agi = monster.agi;
+        battleData.statusAilmentType = StatusAilmentType.NONE;
 
         skills = new List<SkillID>(monster.skills);
 
@@ -80,7 +68,6 @@ public class MonsterController : MonoBehaviour
 
         currentSkill = skill;
         currentTargets = targets;
-
         currentActionResults = BattleCalculator.PrecalculateActionResults(this, skill, targets);
         yield return StartCoroutine(actionBehavior.Execute(this, currentActionResults, skill));
 
@@ -104,9 +91,12 @@ public class MonsterController : MonoBehaviour
             fDodge = true;
         }
         else {
-            if (animator != null)
+            if (!fDodge)
             {
-                animator.SetTrigger("DoHit");
+                if (animator != null)
+                {
+                    animator.SetTrigger("DoHit");
+                }
             }
         }
     }
@@ -116,8 +106,11 @@ public class MonsterController : MonoBehaviour
     /// </summary>
     private void PlayLastHit(BattleCalculator.ActionResult result, bool battleEnd)
     {
-        if (result.IsDamage) {
-            if (!result.IsMiss) {
+        if (result.IsMiss) {
+            if (!fDodge) StartCoroutine(Knockback());
+        }
+        else {
+            if (result.IsDamage) {
                 if (result.IsCritical)
                 {
                     AudioManager.Instance.PlayCriticalSE();
@@ -136,14 +129,17 @@ public class MonsterController : MonoBehaviour
                 }
             }
             else {
-                if (!fDodge) {
-                    StartCoroutine(Knockback());
+                if (battleData.statusAilmentType != StatusAilmentType.NONE)
+                {
+                    animator.SetBool("IsDizzy", true);
                 }
             }
         }
-        else {
+    }
 
-        }
+    public void RecoveryFromDizzy()
+    {
+        animator.SetBool("IsDizzy", false);
     }
 
     /// <summary>
@@ -181,6 +177,7 @@ public class MonsterController : MonoBehaviour
     /// </summary>
     public void PlayDie()
     {
+        animator = GetComponent<Animator>();
         if (animator != null)
         {
             animator.SetTrigger("DoDie");
@@ -197,6 +194,30 @@ public class MonsterController : MonoBehaviour
         {
             animator.SetInteger("BattleResult", battleResult);
         }
+    }
+
+    /// <summary>
+    /// タップをスタートする瞬間（アニメーションイベントで呼ばれる）
+    /// </summary>
+    public void OnStartTimingTap()
+    {
+        if (isPlayer)
+        {
+            StartCoroutine(PlayTimingTap());
+        }
+    }
+
+    private IEnumerator PlayTimingTap()
+    {
+
+        float mul = 0f;
+        yield return TimingTapManager.Instance.PlayTimingTap(r =>
+        {
+            mul = r.multiplier;
+        });
+
+        BattleCalculator.ApplyTimingTapResults(currentActionResults, mul);
+
     }
 
     /// <summary>
@@ -221,7 +242,7 @@ public class MonsterController : MonoBehaviour
         {
             result.Target.PlayLastHit(result, battleEnd); // ← 自分を渡すことで方向が決まる
         }
-        // Debug.Log("OnAttackLastHit");
+        Debug.Log("OnAttackLastHit");
     }
 
     /// <summary>

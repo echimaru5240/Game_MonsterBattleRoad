@@ -18,6 +18,7 @@ public class BattleStageData : ScriptableObject
     public string stageName;   // 例: 「初戦」「決勝戦」「魔王戦」
     public Sprite background;  // ステージ背景（2Dなら）
     public AudioClip bgm;      // 戦闘BGM
+    public int stageLevel;
 
     [Header("特殊設定")]
     public bool isBossStage;   // 魔王 or 大魔王戦なら true

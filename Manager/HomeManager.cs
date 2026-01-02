@@ -20,4 +20,10 @@ public class HomeUI : MonoBehaviour
         AudioManager.Instance.PlayButtonSE();
         SceneManager.LoadScene("PartyEditScene");
     }
+
+    public void OnClickTitle()
+    {
+        AudioManager.Instance.PlayButtonSE();
+        SceneManager.LoadScene("TitleScene");
+    }
 }

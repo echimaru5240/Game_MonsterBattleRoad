@@ -85,6 +85,7 @@ public class MonsterAction_Slime : MonsterActionBase
         }
 
         seq.AppendCallback(() => {
+            selfController.OnStartTimingTap();
             Vector3 fixedPos = new Vector3(-3f, 0.5f, selfController.isPlayer ? 18f : -18f); // Ç±Ç±ÇÕçDÇ´Ç»à íu
             CameraManager.Instance.CutAction_FixedWorldLookOnly(
                 fixedPos,

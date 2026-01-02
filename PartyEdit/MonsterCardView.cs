@@ -82,7 +82,7 @@ public class MonsterCardView : MonoBehaviour,
         cardButton.SetActive(false);
         levelUpButton.SetActive(false);
 
-        if (ownedData != null && ownedData.master != null)
+        if (ownedData != null && ownedData.monsterId != 0)
         {
             iconImage.gameObject.SetActive(true);
             iconImage.sprite = ownedData.monsterFarSprite;
@@ -115,7 +115,7 @@ public class MonsterCardView : MonoBehaviour,
         {
             iconImage.gameObject.SetActive(false);
             nameText.text = "Å|Å|Å|";
-            hpText.text = atkText.text = mgcText.text = defText.text = agiText.text = "-";
+            levelText.text = hpText.text = atkText.text = mgcText.text = defText.text = agiText.text = "-";
         }
 
         scaleTween?.Kill();

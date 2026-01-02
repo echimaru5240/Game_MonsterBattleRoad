@@ -35,6 +35,7 @@ public class PartyDataView : MonoBehaviour
         for (int i = 0; i < partySize; i++)
         {
             var monster = partyData.members[i];
+            if (monster == null) Debug.Log($"RefreshPartyData Monster Null!! [{i}]");
 
             // ★ Party slotも同じイベント1本を渡す
             partySlots[i].Setup(monster, i, OnPartySlotEvent);

@@ -111,8 +111,6 @@ public class MonsterAction_Cactus : MonsterActionBase
         // ƒJƒƒ‰Ø‚è‘Ö‚¦
         needleDanceSeq.AppendCallback(() =>
         {
-            // CameraManager.Instance.SwitchToFixed8_13Camera(currentActionResults[0].Target.transform, !selfController.isPlayer);
-
             Vector3 worldPos = new Vector3(1f, jumpHeight, selfController.isPlayer ? -10f : 10f); // ‚±‚±‚ÍD‚«‚ÈˆÊ’u
             var target = (currentActionResults.Count > 1) ? currentActionResults[1].Target.transform : currentActionResults[0].Target.transform;
             CameraManager.Instance.CutAction_FixedWorldLookOnly(worldPos, target);
@@ -126,6 +124,7 @@ public class MonsterAction_Cactus : MonsterActionBase
         needleDanceSeq.OnComplete(() =>
         {
             anim.SetBool("IsNeedleSpin", true);
+            selfController.OnStartTimingTap();
         });
     }
 
@@ -141,7 +140,7 @@ public class MonsterAction_Cactus : MonsterActionBase
         AudioManager.Instance.PlaySE(needleSE);
         selfController.OnAttackHit();
         spinCount++;
-        if (spinCount > 9) {
+        if (spinCount > 7) {
             anim.SetBool("IsNeedleSpin", false);
             spinCount = 0;
         }

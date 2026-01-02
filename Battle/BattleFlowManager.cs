@@ -41,6 +41,7 @@ public class BattleFlowManager : MonoBehaviour
 
     public void StartStage(int index, int initialCourage)
     {
+        GameContext.Instance.SaveGame();
         currentStageIndex = index;
         var stage = stages[index];
 

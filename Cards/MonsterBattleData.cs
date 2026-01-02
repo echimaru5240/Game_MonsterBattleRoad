@@ -1,7 +1,7 @@
 using UnityEngine;
 using System.Collections.Generic;
 
-public class MonsterBattleData: MonoBehaviour
+public class MonsterBattleData
 {
     [Header("基礎情報")]
     public string Name;
@@ -13,6 +13,8 @@ public class MonsterBattleData: MonoBehaviour
     public float def;
     public float agi;
 
+    public StatusAilmentType statusAilmentType;
+
     [Header("スキル")]
     public SkillID[] skills;
 
@@ -21,7 +23,17 @@ public class MonsterBattleData: MonoBehaviour
     public Sprite monsterFarSprite;
     public Sprite monsterNearSprite;
 
-    public static MonsterBattleData CreateBattleFromMasterData(MonsterData master)
+    // =========================
+    // 1ポイントあたりの上昇量
+    // =========================
+    private float hpPerPoint  = 18.3f;
+    private float atkPerPoint = 2.8f;
+    private float mgcPerPoint = 2.8f;
+    private float defPerPoint = 3.7f;
+    private float agiPerPoint = 1.6f;
+
+
+    public static MonsterBattleData CreateBattleFromMasterData(MonsterData master, int stageLevel)
     {
         if (master == null)
         {
@@ -41,6 +53,12 @@ public class MonsterBattleData: MonoBehaviour
         battleData.def = (float)master.def;
         battleData.agi = (float)master.agi;
 
+        battleData.hpPerPoint  = master.hpPerPoint;
+        battleData.atkPerPoint = master.atkPerPoint;
+        battleData.mgcPerPoint = master.mgcPerPoint;
+        battleData.defPerPoint = master.defPerPoint;
+        battleData.agiPerPoint = master.agiPerPoint;
+
         // 表示用
         battleData.prefab = master.prefab;
         battleData.monsterFarSprite = master.monsterFarSprite;  // DQ風遠景差し替えがあるなら変更
@@ -48,6 +66,9 @@ public class MonsterBattleData: MonoBehaviour
 
         // スキル
         battleData.skills = master.skills;
+
+        // ステータスポイント割り振り
+        ApplyAllocatedPoints(battleData, stageLevel * 5);
 
         return battleData;
     }
@@ -81,5 +102,50 @@ public class MonsterBattleData: MonoBehaviour
         battleData.skills = master.skills;
 
         return battleData;
+    }
+
+    // 共通：ポイント配分
+    private static void ApplyAllocatedPoints(MonsterBattleData b, int totalPoints)
+    {
+        if (b == null || totalPoints <= 0) return;
+
+        // profile未設定時のデフォルト比率（HP多め）
+        float wHp  = 3f;
+        float wAtk = 2f;
+        float wMgc = 2f;
+        float wDef = 2f;
+        float wAgi = 1f;
+
+        float sum = Mathf.Max(0.0001f, wHp + wAtk + wMgc + wDef + wAgi);
+
+        int addHp  = Mathf.FloorToInt(totalPoints * (wHp  / sum));
+        int addAtk = Mathf.FloorToInt(totalPoints * (wAtk / sum));
+        int addMgc = Mathf.FloorToInt(totalPoints * (wMgc / sum));
+        int addDef = Mathf.FloorToInt(totalPoints * (wDef / sum));
+        int addAgi = Mathf.FloorToInt(totalPoints * (wAgi / sum));
+
+        int used = addHp + addAtk + addMgc + addDef + addAgi;
+        int rem  = totalPoints - used;
+
+        // 余りの行き先
+        StatType remTo = StatType.HP;
+        if (rem > 0)
+        {
+            switch (remTo)
+            {
+                case StatType.HP:  addHp  += rem; break;
+                case StatType.ATK: addAtk += rem; break;
+                case StatType.MGC: addMgc += rem; break;
+                case StatType.DEF: addDef += rem; break;
+                case StatType.AGI: addAgi += rem; break;
+            }
+        }
+
+        // 反映（ここは “ポイント=そのまま加算” の設計）
+        b.hp  += (b.hpPerPoint  * addHp );
+        b.atk += (b.atkPerPoint * addAtk);
+        b.mgc += (b.mgcPerPoint * addMgc);
+        b.def += (b.defPerPoint * addDef);
+        b.agi += (b.agiPerPoint * addAgi);
     }
 }

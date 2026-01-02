@@ -141,6 +141,7 @@ public class MonsterAction_Turtle : MonsterActionBase
     public void OnFireBallSpawn()
     {
         Debug.Log("FireBall Spawn!");
+        selfController.OnStartTimingTap();
         // 3. 頭上にファイアーボール生成
         Vector3 spawnPos = selfController.transform.position + Vector3.up * fireballHeight;
         currentFireball = GameObject.Instantiate(fireballPrefab, spawnPos, Quaternion.identity);

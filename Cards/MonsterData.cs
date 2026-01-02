@@ -15,6 +15,13 @@ public class MonsterData : ScriptableObject
     public int def;
     public int agi;
 
+    [Header("ポイント上昇量（1ptあたり）")]
+    public float hpPerPoint;
+    public float atkPerPoint;
+    public float mgcPerPoint;
+    public float defPerPoint;
+    public float agiPerPoint;
+
     [Header("スキル")]
     public SkillID[] skills;
 

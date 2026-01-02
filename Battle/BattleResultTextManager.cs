@@ -32,9 +32,13 @@ public class BattleResultTextManager : MonoBehaviour
     // ================================
     // バトル全体メッセージ表示
     // ================================
-    public void ShowMainText(bool battleWon)
+    public void ShowMainText(bool battleWon, int turn, int gainExp)
     {
         Play(battleWon);
+        turnText.text = turn.ToString();
+        turnText.gameObject.SetActive(true);
+        gainExpText.text = battleWon ? gainExp.ToString() : "0";
+        gainExpText.gameObject.SetActive(true);
     }
 
     public void Play(bool battleWon)

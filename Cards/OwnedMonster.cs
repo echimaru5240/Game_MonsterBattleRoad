@@ -5,8 +5,15 @@ using System.Collections.Generic;
 [Serializable]
 public class OwnedMonster
 {
-    public MonsterData master;
+    // =========================
+    // 識別子（Master復元用）
+    // =========================
+    [Header("識別子")]
+    public int monsterId = 0;   // MonsterData.id と一致させる
 
+    // =========================
+    // 基礎情報
+    // =========================
     [Header("基礎情報")]
     public string Name;
     public bool isParty;
@@ -25,7 +32,7 @@ public class OwnedMonster
     // =========================
     // 基礎ステ（masterからコピー）
     // =========================
-    [Header("基礎ステータス（masterから生成）")]
+    [Header("基礎ステータス")]
     public int baseHp;
     public int baseAtk;
     public int baseMgc;
@@ -33,7 +40,7 @@ public class OwnedMonster
     public int baseAgi;
 
     // =========================
-    // 振り分け（保存するのは「何ポイント振ったか」）
+    // ステ振り（保存対象）
     // =========================
     [Header("ステ振り（ポイント配分）")]
     [Min(0)] public int hpPoints;
@@ -44,17 +51,16 @@ public class OwnedMonster
 
     // =========================
     // 1ポイントあたりの上昇量
-    // ※モンスター個体差を出したいなら master 側に持たせてもOK
     // =========================
     [Header("ポイント上昇量（1ptあたり）")]
-    public float hpPerPoint = 18.3f;
+    public float hpPerPoint  = 18.3f;
     public float atkPerPoint = 2.8f;
     public float mgcPerPoint = 2.8f;
     public float defPerPoint = 3.7f;
     public float agiPerPoint = 1.6f;
 
     // =========================
-    // 「現在ステータス」は計算で出す（保存しない）
+    // 現在ステ（計算値・非保存）
     // =========================
     public float hp  => baseHp  + hpPoints  * hpPerPoint;
     public float atk => baseAtk + atkPoints * atkPerPoint;
@@ -62,47 +68,36 @@ public class OwnedMonster
     public float def => baseDef + defPoints * defPerPoint;
     public float agi => baseAgi + agiPoints * agiPerPoint;
 
+    // =========================
+    // スキル
+    // =========================
     [Header("スキル")]
     public SkillID[] skills;
 
+    // =========================
+    // 表示用（※セーブしない）
+    // =========================
     [Header("表示用")]
     public GameObject prefab;
     public Sprite monsterFarSprite;
     public Sprite monsterNearSprite;
 
     // =========================
-    // イベント（UI更新用）
+    // UI通知
     // =========================
     [NonSerialized]
     public Action OnChanged;
 
-    private void NotifyChanged()
-    {
-        OnChanged?.Invoke();
-    }
+    private void NotifyChanged() => OnChanged?.Invoke();
 
     // =========================
-    // 経験値テーブル設定
+    // 経験値テーブル
     // =========================
     public const int MaxLevel = 100;
 
-    /// <summary>
-    /// 次のレベルまでに必要な経験値（例：緩やか→後半きついカーブ）
-    /// 「次レベルに必要な量」を返すタイプ
-    /// </summary>
     public static int GetRequiredExpForNext(int currentLevel)
     {
-        // Lv1→2 から計算。MaxLevel 到達時は 0
         if (currentLevel >= MaxLevel) return 0;
-        if (currentLevel == 0) return 0;
-
-        // 例：ベース + 二次項（調整しやすい）
-        // Lv1:  20 +  10 = 30
-        // Lv2:  20 +  40 = 60
-        // Lv3:  20 +  90 = 110
-        // Lv4:  20 +  160 = 180
-        // Lv10: 20 + 300 = 320
-        // Lv30: 20 + 2700 = 2720
         int lv = Mathf.Max(1, currentLevel);
         return 20 + (lv * lv * 10);
     }
@@ -116,8 +111,7 @@ public class OwnedMonster
 
     public bool TryAllocate(StatType type, int amount = 1)
     {
-        if (amount <= 0) return false;
-        if (unspentStatPoints < amount) return false;
+        if (amount <= 0 || unspentStatPoints < amount) return false;
 
         switch (type)
         {
@@ -130,109 +124,92 @@ public class OwnedMonster
         }
 
         unspentStatPoints -= amount;
-        NotifyChanged();   // ★ここ
+        NotifyChanged();
         return true;
     }
 
     // =========================
-    // 経験値獲得 → レベルアップ
+    // 経験値獲得
     // =========================
-    /// <summary>
-    /// 経験値を加算し、必要なら複数回レベルアップする。
-    /// levelUpで得るポイントは levelUpPointsPerLevel で指定。
-    /// </summary>
     public int GainExp(int amount, int levelUpPointsPerLevel = 5)
     {
-        if (amount <= 0) return 0;
-        if (level >= MaxLevel) return 0;
-        Debug.Log("GainExp");
+        if (amount <= 0 || level >= MaxLevel) return 0;
 
         exp += amount;
         totalExp += amount;
 
-        int leveledUpCount = 0;
-        while (level < MaxLevel)
+        int leveledUp = 0;
+        while (level < MaxLevel && exp >= RequiredExpToNext)
         {
-            int need = RequiredExpToNext;
-            if (need <= 0) break;
-
-            if (exp < need) break;
-
-            exp -= need;
+            exp -= RequiredExpToNext;
             level++;
-            leveledUpCount++;
-            Debug.Log("LevelUp");
-
+            leveledUp++;
             unspentStatPoints += Mathf.Max(0, levelUpPointsPerLevel);
         }
 
-        // MaxLevel到達時のexp処理（好みで 0 にするなど）
-        if (level >= MaxLevel)
-        {
-            // exp = 0; // ←Maxで余剰経験値を消すなら
-        }
+        if (leveledUp > 0)
+            NotifyChanged();
 
-        if (leveledUpCount > 0)
-        {
-            NotifyChanged();   // ★ここ
-        }
-
-        return leveledUpCount;
+        return leveledUp;
     }
-
-    // =========================
-    // Factory
-    // =========================
-    public static OwnedMonster CreateOwnedFromMaster(MonsterData master)
-        => OwnedMonsterFactory.CreateFromMaster(master);
 }
 
+// =========================
+// Factory
+// =========================
 public static class OwnedMonsterFactory
 {
     public static OwnedMonster CreateFromMaster(MonsterData master)
     {
         if (master == null)
         {
-            Debug.LogError("OwnedMonsterFactory.CreateFromMaster: master is null");
+            Debug.LogError("OwnedMonsterFactory: master is null");
             return null;
         }
 
-        var owned = new OwnedMonster();
+        var owned = new OwnedMonster
+        {
+            monsterId = master.id,
+            Name = master.Name,
 
-        owned.master = master;
-        owned.Name = master.Name;
+            baseHp  = master.hp,
+            baseAtk = master.atk,
+            baseMgc = master.mgc,
+            baseDef = master.def,
+            baseAgi = master.agi,
 
-        // 基礎ステ（master からコピー）
-        owned.baseHp  = master.hp;
-        owned.baseAtk = master.atk;
-        owned.baseMgc = master.mgc;
-        owned.baseDef = master.def;
-        owned.baseAgi = master.agi;
+            hpPerPoint  = master.hpPerPoint,
+            atkPerPoint = master.atkPerPoint,
+            mgcPerPoint = master.mgcPerPoint,
+            defPerPoint = master.defPerPoint,
+            agiPerPoint = master.agiPerPoint,
 
-        // 初期値
-        owned.level = 1;
-        owned.exp = 0;
-        owned.unspentStatPoints = 5;
+            level = 1,
+            exp = 0,
+            unspentStatPoints = 5,
 
-        // 表示用
-        owned.prefab = master.prefab;
-        owned.monsterFarSprite = master.monsterFarSprite;
-        owned.monsterNearSprite = master.monsterNearSprite;
+            prefab = master.prefab,
+            monsterFarSprite = master.monsterFarSprite,
+            monsterNearSprite = master.monsterNearSprite,
 
-        // スキル
-        owned.skills = master.skills;
+            skills = master.skills
+        };
 
         return owned;
     }
+
 }
 
-
-[CreateAssetMenu(fileName = "PlayerMonsterInventory", menuName = "BattleRoad/Player Monster Inventory")]
-public class PlayerMonsterInventory : ScriptableObject
+// =========================
+// Inventory / Party
+// =========================
+[Serializable]
+public class PlayerMonsterInventory
 {
     public List<OwnedMonster> ownedMonsters = new();
 }
 
+[Serializable]
 public class PartyData
 {
     public string partyName;
@@ -242,5 +219,9 @@ public class PartyData
     {
         partyName = "";
         members = new OwnedMonster[3];
+        for (int i = 0; i < members.Length; i++)
+        {
+            members[i] = null;
+        }
     }
 }

@@ -82,7 +82,7 @@ public static class SkillDatabase
 	{
         new SkillData(SkillID.SKILL_ID_SLIME_STRIKE, "スラ・ストライク", SkillAction.ATTACK, SkillCategory.PHYSICAL, TargetType.ENEMY_SINGLE, ElementType.NONE, 200, 0.95f, 0.3f, StatusAilmentType.NONE, 0f, StatusBuffType.NONE, 0, 0),
         new SkillData(SkillID.SKILL_ID_TOUSAND_NEEDLE, "ニードルダンス", SkillAction.ATTACK, SkillCategory.PHYSICAL, TargetType.ENEMY_ALL, ElementType.NONE, 80, 0.95f, 0f, StatusAilmentType.PARALYSIS, 0.1f, StatusBuffType.NONE, 0, 0),
-        new SkillData(SkillID.SKILL_ID_HEAL, "ヒール", SkillAction.HEAL, SkillCategory.MAGICAL, TargetType.PLAYER_SINGLE, ElementType.NONE, 200, 1f, 0f, StatusAilmentType.NONE, 0f, StatusBuffType.NONE, 0, 0),
+        new SkillData(SkillID.SKILL_ID_HEAL, "ヒール", SkillAction.HEAL, SkillCategory.MAGICAL, TargetType.PLAYER_SINGLE, ElementType.NONE, 300, 1f, 0f, StatusAilmentType.NONE, 0f, StatusBuffType.NONE, 0, 0),
         new SkillData(SkillID.SKILL_ID_TRAP_BITE, "トラップバイト", SkillAction.ATTACK, SkillCategory.PHYSICAL, TargetType.ENEMY_SINGLE, ElementType.NONE, 200, 0.95f, 0.1f, StatusAilmentType.NONE, 0f, StatusBuffType.NONE, 0, 0),
         new SkillData(SkillID.SKILL_ID_SPIKE_ROLLING, "ローリングスパイク", SkillAction.ATTACK, SkillCategory.PHYSICAL, TargetType.ENEMY_SINGLE, ElementType.NONE, 200, 0.95f, 0.5f, StatusAilmentType.NONE, 0f, StatusBuffType.NONE, 0, 0),
         new SkillData(SkillID.SKILL_ID_CACTUS_LARIAT, "サボテンラリアット", SkillAction.ATTACK, SkillCategory.PHYSICAL, TargetType.ENEMY_SINGLE, ElementType.NONE, 200, 0.95f, 0.1f, StatusAilmentType.NONE, 0f, StatusBuffType.NONE, 0, 0),
@@ -90,7 +90,7 @@ public static class SkillDatabase
         new SkillData(SkillID.SKILL_ID_ENERGY_CACTUS, "サボテンジュース", SkillAction.HEAL, SkillCategory.SPECIAL, TargetType.PLAYER_SINGLE, ElementType.NONE, 200, 1f, 0f, StatusAilmentType.NONE, 0f, StatusBuffType.NONE, 0, 0),
         new SkillData(SkillID.SKILL_ID_POISON_NEEDLE, "ポイズンニードル", SkillAction.ATTACK, SkillCategory.PHYSICAL, TargetType.ENEMY_SINGLE, ElementType.NONE, 200, 0.95f, 0.1f, StatusAilmentType.POISON, 0.2f, StatusBuffType.NONE, 0, 0),
         new SkillData(SkillID.SKILL_ID_TREASURE_CRUNCH, "トレジャークランチ", SkillAction.ATTACK, SkillCategory.PHYSICAL, TargetType.ENEMY_SINGLE, ElementType.NONE, 200, 0.95f, 0.1f, StatusAilmentType.NONE, 0f, StatusBuffType.NONE, 0, 0),
-        new SkillData(SkillID.SKILL_ID_FIRE_BREATH, "ファイアブレス", SkillAction.ATTACK, SkillCategory.PHYSICAL, TargetType.ENEMY_SINGLE, ElementType.FIRE, 200, 1f, 0.1f, StatusAilmentType.NONE, 0f, StatusBuffType.NONE, 0, 0),
+        new SkillData(SkillID.SKILL_ID_FIRE_BREATH, "ファイアブレス", SkillAction.ATTACK, SkillCategory.PHYSICAL, TargetType.ENEMY_ALL, ElementType.FIRE, 200, 1f, 0.1f, StatusAilmentType.NONE, 0f, StatusBuffType.NONE, 0, 0),
         new SkillData(SkillID.SKILL_ID_ICE_BREATH, "アイスブレス", SkillAction.ATTACK, SkillCategory.PHYSICAL, TargetType.ENEMY_SINGLE, ElementType.ICE, 200, 0.95f, 0.1f, StatusAilmentType.NONE, 0f, StatusBuffType.NONE, 0, 0),
         new SkillData(SkillID.SKILL_ID_THUNDER_BREATH, "サンダーブレス", SkillAction.ATTACK, SkillCategory.PHYSICAL, TargetType.ENEMY_SINGLE, ElementType.NONE, 200, 0.95f, 0.1f, StatusAilmentType.NONE, 0f, StatusBuffType.NONE, 0, 0),
         new SkillData(SkillID.SKILL_ID_MUSH_CRUSHER, "マッシュクラッシャー", SkillAction.ATTACK, SkillCategory.PHYSICAL, TargetType.ENEMY_SINGLE, ElementType.NONE, 200, 0.95f, 0.1f, StatusAilmentType.NONE, 0f, StatusBuffType.NONE, 0, 0),
@@ -99,5 +99,8 @@ public static class SkillDatabase
         new SkillData(SkillID.SKILL_ID_FROST_BITE, "フロストバイト", SkillAction.ATTACK, SkillCategory.PHYSICAL, TargetType.ENEMY_SINGLE, ElementType.ICE, 200, 0.5f, 0.8f, StatusAilmentType.NONE, 0f, StatusBuffType.NONE, 0, 0),
         new SkillData(SkillID.SKILL_ID_SLIME_WAVE, "スライムウェーブ", SkillAction.ATTACK, SkillCategory.PHYSICAL, TargetType.ENEMY_ALL, ElementType.NONE, 80, 0.95f, 0f, StatusAilmentType.NONE, 0f, StatusBuffType.NONE, 0, 0),
         new SkillData(SkillID.SKILL_ID_PSYCO_LASER, "サイコレーザー", SkillAction.ATTACK, SkillCategory.SPECIAL, TargetType.ENEMY_SINGLE, ElementType.NONE, 200, 0.95f, 0.1f, StatusAilmentType.NONE, 0f, StatusBuffType.NONE, 0, 0),
+        new SkillData(SkillID.SKILL_ID_PARALYSIS_REATH, "麻痺ブレス", SkillAction.SPECIAL, SkillCategory.BREATH, TargetType.ENEMY_ALL, ElementType.NONE, 100, 0.8f, 0f, StatusAilmentType.PARALYSIS, 0.5f, StatusBuffType.NONE, 0, 0),
+        new SkillData(SkillID.SKILL_ID_MUSH_POWDER, "キノコの胞子", SkillAction.SPECIAL, SkillCategory.BREATH, TargetType.ENEMY_ALL, ElementType.NONE, 100, 0.4f, 0f, StatusAilmentType.PARALYSIS, 1f, StatusBuffType.NONE, 0, 0),
+        new SkillData(SkillID.SKILL_ID_ATTACK_UP1, "闘いの咆哮", SkillAction.SPECIAL, SkillCategory.SPECIAL, TargetType.PLAYER_ALL, ElementType.NONE, 100, 1f, 0f, StatusAilmentType.NONE, 0f, StatusBuffType.ATTACK, 1, 3),
     };
 }
